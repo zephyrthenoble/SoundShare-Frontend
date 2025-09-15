@@ -1,5 +1,145 @@
 @import "tailwindcss";
-@import "jQuery-QueryBuilder/dist/css/query-builder.default.css";
+
+/* React Query Builder Base Styles (to avoid source map issues) */
+.queryBuilder {
+  font-family: sans-serif;
+  font-size: 14px;
+}
+
+.ruleGroup {
+  border: 1px solid #d9d9d9;
+  border-radius: 6px;
+  padding: 12px;
+  margin: 8px 0;
+  background: #fff;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+}
+
+.ruleGroup-header {
+  margin-bottom: 12px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.ruleGroup-body {
+  margin-left: 16px;
+}
+
+.rule {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 6px 0;
+  padding: 8px 12px;
+  border: 1px solid #f0f0f0;
+  border-radius: 4px;
+  background: #fafafa;
+  transition: background-color 0.2s;
+}
+
+.rule:hover {
+  background: #f5f5f5;
+}
+
+.rule > * {
+  margin: 0 4px;
+}
+
+.rule-fields,
+.rule-operators,
+.rule-value {
+  min-width: 120px;
+}
+
+/* Button styles for query builder */
+.ruleGroup-addRule,
+.ruleGroup-addGroup,
+.ruleGroup-cloneGroup,
+.ruleGroup-remove,
+.rule-remove {
+  padding: 4px 8px;
+  border: 1px solid #d9d9d9;
+  border-radius: 4px;
+  background: #fff;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.ruleGroup-addRule:hover,
+.ruleGroup-addGroup:hover,
+.ruleGroup-cloneGroup:hover {
+  border-color: #1677ff;
+  color: #1677ff;
+}
+
+.ruleGroup-remove:hover,
+.rule-remove:hover {
+  border-color: #ff4d4f;
+  color: #ff4d4f;
+}
+
+/* Combinator styles */
+.ruleGroup-combinators select {
+  padding: 4px 8px;
+  border: 1px solid #d9d9d9;
+  border-radius: 4px;
+  background: #fff;
+}
+
+/* React Query Builder Custom Styles */
+.queryBuilder-branches {
+  border: 1px solid #d9d9d9;
+  border-radius: 6px;
+  background: #fafafa;
+  padding: 16px;
+}
+
+.ruleGroup {
+  border: 1px solid #e6f4ff;
+  border-radius: 6px;
+  background: #ffffff;
+  margin: 8px 0;
+  padding: 12px;
+}
+
+.ruleGroup-header {
+  margin-bottom: 12px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.ruleGroup-body {
+  margin-left: 16px;
+}
+
+.rule {
+  border: 1px solid #f0f0f0;
+  border-radius: 4px;
+  background: #ffffff;
+  margin: 6px 0;
+  padding: 8px 12px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.rule-fields,
+.rule-operators,
+.rule-value {
+  min-width: 120px;
+}
+
+.ruleGroup-combinators,
+.ruleGroup-addRule,
+.ruleGroup-addGroup,
+.ruleGroup-cloneGroup,
+.ruleGroup-remove,
+.rule-remove {
+  margin: 0 4px;
+}
 
 :root {
   --background: #ffffff;

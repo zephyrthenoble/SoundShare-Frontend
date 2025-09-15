@@ -1,10 +1,11 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { Card, Input, Button, Space, Typography, message } from 'antd'
-import { Plus } from 'lucide-react'
+import { Card, Input, Button, Space, Typography, message, Collapse } from 'antd'
+import { Plus, Filter, RotateCcw } from 'lucide-react'
 import { QueryBuilderPanel } from './QueryBuilderPanel'
 import { SongTable } from './SongTable'
+import { AdvancedFilterPanel } from './AdvancedFilterPanel'
 import type { SongsFilters } from '@/lib/api'
 import type { Playlist, PlaylistFilter } from '@/lib/playlist-types'
 import { generateFilterId } from '@/lib/playlist-types'
@@ -27,6 +28,7 @@ export function LibraryColumn({
   const [filters, setFilters] = useState<SongsFilters>({})
   const [filterName, setFilterName] = useState('')
   const [showQueryBuilder, setShowQueryBuilder] = useState(false)
+  const [activeKeys, setActiveKeys] = useState<string[]>([])
 
   // Load editing filter when it changes
   useEffect(() => {
@@ -41,6 +43,11 @@ export function LibraryColumn({
     }
   }, [editingFilter])
 
+  // Check if we have any active filters
+  const hasActiveFilters = Object.keys(filters).some(
+    key => filters[key as keyof SongsFilters] !== undefined && filters[key as keyof SongsFilters] !== ''
+  )
+
   const saveFilterToPlaylist = () => {
     if (!currentPlaylist) {
       message.error('No playlist selected')
@@ -52,12 +59,7 @@ export function LibraryColumn({
       return
     }
 
-    // Check if we have any active filters
-    const hasFilters = Object.keys(filters).some(
-      key => filters[key as keyof SongsFilters] !== undefined && filters[key as keyof SongsFilters] !== ''
-    )
-
-    if (!hasFilters) {
+    if (!hasActiveFilters) {
       message.error('Please set at least one filter')
       return
     }
@@ -103,6 +105,14 @@ export function LibraryColumn({
     setShowQueryBuilder(true)
   }
 
+  const handleFiltersChange = (newFilters: SongsFilters) => {
+    setFilters(newFilters)
+  }
+
+  const handleClearFilters = () => {
+    setFilters({})
+  }
+
 
   return (
     <div className="h-full">
@@ -110,33 +120,82 @@ export function LibraryColumn({
         <Title level={4}>Library</Title>
 
         <Space direction="vertical" size="large" className="w-full">
-          {/* Filter name input when editing/creating filter */}
-          <div>
-            <Input
-              placeholder="Enter filter name..."
-              value={filterName}
-              onChange={(e) => setFilterName(e.target.value)}
-              disabled={!currentPlaylist}
-            />
-            <Space className="w-full mt-2">
-              <Button
-                icon={<Plus size={16} />}
-                onClick={handleCreateNewFilter}
-                disabled={!currentPlaylist}
-                type="dashed"
-              >
-                Create Filter
-              </Button>
-              <Button
-                icon={<Plus size={16} />}
-                onClick={saveFilterToPlaylist}
-                disabled={!currentPlaylist || !filterName.trim()}
-                type="primary"
-              >
-                {editingFilter ? 'Update Filter' : 'Save to Playlist'}
-              </Button>
-            </Space>
-          </div>
+          {/* Advanced Filters Section - Always Available */}
+          <Collapse
+            activeKey={activeKeys}
+            onChange={(keys) => setActiveKeys(keys as string[])}
+            ghost
+            size="large"
+            items={[
+              {
+                key: 'filters',
+                label: (
+                  <div className="flex justify-between items-center">
+                    <div className="flex items-center space-x-2">
+                      <Filter size={20} />
+                      <span className="font-medium">
+                        Filters {hasActiveFilters && <span className="text-blue-600">({Object.keys(filters).length} active)</span>}
+                      </span>
+                    </div>
+                    {hasActiveFilters && (
+                      <Button
+                        type="text"
+                        icon={<RotateCcw size={16} />}
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          handleClearFilters()
+                        }}
+                        className="text-gray-500 hover:text-red-500"
+                        size="small"
+                      >
+                        Clear All
+                      </Button>
+                    )}
+                  </div>
+                ),
+                children: (
+                  <AdvancedFilterPanel
+                    filters={filters}
+                    onFiltersChange={handleFiltersChange}
+                  />
+                ),
+              },
+            ]}
+          />
+
+          {/* Playlist Filter Management - Only shown when a playlist is selected */}
+          {currentPlaylist && (
+            <Card size="small" className="bg-blue-50 border-blue-200">
+              <Space direction="vertical" size="small" className="w-full">
+                <div>
+                  <Input
+                    placeholder="Enter filter name to save to playlist..."
+                    value={filterName}
+                    onChange={(e) => setFilterName(e.target.value)}
+                  />
+                </div>
+                <Space className="w-full justify-between">
+                  <Button
+                    icon={<Plus size={16} />}
+                    onClick={handleCreateNewFilter}
+                    type="dashed"
+                    size="small"
+                  >
+                    Advanced Query Builder
+                  </Button>
+                  <Button
+                    icon={<Plus size={16} />}
+                    onClick={saveFilterToPlaylist}
+                    disabled={!filterName.trim() || !hasActiveFilters}
+                    type="primary"
+                    size="small"
+                  >
+                    {editingFilter ? 'Update Filter' : 'Save to Playlist'}
+                  </Button>
+                </Space>
+              </Space>
+            </Card>
+          )}
 
           {/* Show QueryBuilder when creating/editing filter, otherwise show SongTable */}
           {showQueryBuilder ? (
