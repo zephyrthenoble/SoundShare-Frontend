@@ -41,10 +41,48 @@ export interface TagGroup {
   created_at: string | null
 }
 
+export interface QueryBuilderField {
+  name: string
+  label: string
+  inputType: 'text' | 'number' | 'select' | 'checkbox'
+  operators: Array<{
+    name: string
+    label: string
+  }>
+  values?: Array<{
+    name: string
+    label: string
+  }>
+  min?: number
+  max?: number
+  step?: number
+}
+
+export interface QueryBuilderFieldsResponse {
+  fields: QueryBuilderField[]
+  metadata: {
+    total_fields: number
+    total_tags: number
+    year_range: {
+      min: number | null
+      max: number | null
+    }
+    tempo_range: {
+      min: number | null
+      max: number | null
+    }
+    duration_range: {
+      min: number | null
+      max: number | null
+    }
+  }
+}
+
 export interface SongsFilters {
   tag?: string
   tag1?: string
   tag2?: string
+  display_name?: string
   artist?: string
   genre?: string
   album?: string
@@ -57,6 +95,17 @@ export interface SongsFilters {
   danceability_max?: number
   tempo_min?: number
   tempo_max?: number
+  // Support for negated filters (NOT conditions)
+  not_display_name?: string
+  not_artist?: string
+  not_genre?: string
+  not_album?: string
+  not_year?: number
+  not_tag?: string
+  not_tag1?: string
+  not_tag2?: string
+  // Support for dynamic numbered parameters for OR groups
+  [key: string]: string | number | undefined
 }
 
 class ApiError extends Error {
@@ -98,22 +147,12 @@ async function apiRequest<T>(
 }
 
 export const songsApi = {
-  // Get all songs with optional filters
-  getSongs: async (filters?: SongsFilters): Promise<Song[]> => {
-    const params = new URLSearchParams()
-
-    if (filters) {
-      Object.entries(filters).forEach(([key, value]) => {
-        if (value !== undefined && value !== null && value !== '') {
-          params.append(key, value.toString())
-        }
-      })
-    }
-
-    const queryString = params.toString()
-    const endpoint = queryString ? `/songs?${queryString}` : '/songs'
-
-    return apiRequest<Song[]>(endpoint)
+  // Get all songs with optional query filter
+  getSongs: async (query?: any): Promise<Song[]> => {
+    return apiRequest<Song[]>('/songs', {
+      method: 'POST',
+      body: JSON.stringify(query || {}),
+    })
   },
 
   // Add tag to song
@@ -153,6 +192,13 @@ export const tagsApi = {
   // Get tag groups
   getTagGroups: async (): Promise<TagGroup[]> => {
     return apiRequest<TagGroup[]>('/tag-groups')
+  },
+}
+
+export const queryBuilderApi = {
+  // Get QueryBuilder field configuration
+  getFields: async (): Promise<QueryBuilderFieldsResponse> => {
+    return apiRequest<QueryBuilderFieldsResponse>('/querybuilder/fields')
   },
 }
 

@@ -6,7 +6,7 @@ import { Plus, Filter, RotateCcw } from 'lucide-react'
 import { QueryBuilderPanel } from './QueryBuilderPanel'
 import { SongTable } from './SongTable'
 import { AdvancedFilterPanel } from './AdvancedFilterPanel'
-import type { SongsFilters } from '@/lib/api'
+import type { QueryJSON } from '@/lib/queryBuilderUtils'
 import type { Playlist, PlaylistFilter } from '@/lib/playlist-types'
 import { generateFilterId } from '@/lib/playlist-types'
 
@@ -25,7 +25,7 @@ export function LibraryColumn({
   onFilterSaved,
   onSongAddedToPlaylist
 }: LibraryColumnProps) {
-  const [filters, setFilters] = useState<SongsFilters>({})
+  const [query, setQuery] = useState<QueryJSON | null>(null)
   const [filterName, setFilterName] = useState('')
   const [showQueryBuilder, setShowQueryBuilder] = useState(false)
   const [activeKeys, setActiveKeys] = useState<string[]>([])
@@ -33,20 +33,18 @@ export function LibraryColumn({
   // Load editing filter when it changes
   useEffect(() => {
     if (editingFilter) {
-      setFilters(editingFilter.filters)
+      setQuery(editingFilter.filters as any) // TODO: Update PlaylistFilter type
       setFilterName(editingFilter.name)
       setShowQueryBuilder(true)
     } else {
-      setFilters({})
+      setQuery(null)
       setFilterName('')
       setShowQueryBuilder(false)
     }
   }, [editingFilter])
 
   // Check if we have any active filters
-  const hasActiveFilters = Object.keys(filters).some(
-    key => filters[key as keyof SongsFilters] !== undefined && filters[key as keyof SongsFilters] !== ''
-  )
+  const hasActiveQuery = query !== null && (query.rules.length > 0 || query.groups.length > 0)
 
   const saveFilterToPlaylist = () => {
     if (!currentPlaylist) {
@@ -59,7 +57,7 @@ export function LibraryColumn({
       return
     }
 
-    if (!hasActiveFilters) {
+    if (!hasActiveQuery) {
       message.error('Please set at least one filter')
       return
     }
@@ -67,7 +65,7 @@ export function LibraryColumn({
     const newFilter: PlaylistFilter = {
       id: editingFilter?.id || generateFilterId(),
       name: filterName.trim(),
-      filters: { ...filters },
+      filters: query as any, // TODO: Update PlaylistFilter type to use QueryJSON
       created_at: editingFilter?.created_at || new Date().toISOString(),
       updated_at: new Date().toISOString()
     }
@@ -85,7 +83,7 @@ export function LibraryColumn({
     }
 
     // Clear the editing state
-    setFilters({})
+    setQuery(null)
     setFilterName('')
     onFilterSaved(newFilter)
     setShowQueryBuilder(false)
@@ -105,12 +103,12 @@ export function LibraryColumn({
     setShowQueryBuilder(true)
   }
 
-  const handleFiltersChange = (newFilters: SongsFilters) => {
-    setFilters(newFilters)
+  const handleQueryChange = (newQuery: QueryJSON | null) => {
+    setQuery(newQuery)
   }
 
-  const handleClearFilters = () => {
-    setFilters({})
+  const handleClearQuery = () => {
+    setQuery(null)
   }
 
 
@@ -134,16 +132,16 @@ export function LibraryColumn({
                     <div className="flex items-center space-x-2">
                       <Filter size={20} />
                       <span className="font-medium">
-                        Filters {hasActiveFilters && <span className="text-blue-600">({Object.keys(filters).length} active)</span>}
+                        Filters {hasActiveQuery && <span className="text-blue-600">(active)</span>}
                       </span>
                     </div>
-                    {hasActiveFilters && (
+                    {hasActiveQuery && (
                       <Button
                         type="text"
                         icon={<RotateCcw size={16} />}
                         onClick={(e) => {
                           e.stopPropagation()
-                          handleClearFilters()
+                          handleClearQuery()
                         }}
                         className="text-gray-500 hover:text-red-500"
                         size="small"
@@ -155,8 +153,8 @@ export function LibraryColumn({
                 ),
                 children: (
                   <AdvancedFilterPanel
-                    filters={filters}
-                    onFiltersChange={handleFiltersChange}
+                    filters={query}
+                    onFiltersChange={handleQueryChange}
                   />
                 ),
               },
@@ -186,7 +184,7 @@ export function LibraryColumn({
                   <Button
                     icon={<Plus size={16} />}
                     onClick={saveFilterToPlaylist}
-                    disabled={!filterName.trim() || !hasActiveFilters}
+                    disabled={!filterName.trim() || !hasActiveQuery}
                     type="primary"
                     size="small"
                   >
@@ -206,7 +204,7 @@ export function LibraryColumn({
             />
           ) : (
             <SongTable
-              filters={filters}
+              query={query}
               currentPlaylist={currentPlaylist}
               onSongAddedToPlaylist={onSongAddedToPlaylist}
             />

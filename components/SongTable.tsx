@@ -16,7 +16,8 @@ import {
 } from '@tanstack/react-table'
 import { Table, Tag, Button, Input, Space, Card, Typography, Spin, Alert, Select } from 'antd'
 import { PlayCircle, Music, Clock, Hash, Calendar, User, Disc, FolderOpen, ChevronLeft, ChevronRight, Plus } from 'lucide-react'
-import { songsApi, type Song, type SongsFilters } from '@/lib/api'
+import { songsApi, type Song } from '@/lib/api'
+import type { QueryJSON } from '@/lib/queryBuilderUtils'
 import { EditableTagCell } from './EditableTagCell'
 import { useMusicPlayer } from '@/lib/music-context'
 import type { Playlist } from '@/lib/playlist-types'
@@ -26,14 +27,14 @@ const { Title } = Typography
 const { Search } = Input
 
 interface SongTableProps {
-  filters?: SongsFilters
+  query?: QueryJSON | null
   currentPlaylist?: Playlist | null
   onSongAddedToPlaylist?: () => void
 }
 
 
 
-export function SongTable({ filters = {}, currentPlaylist, onSongAddedToPlaylist }: SongTableProps) {
+export function SongTable({ query = null, currentPlaylist, onSongAddedToPlaylist }: SongTableProps) {
   const [sorting, setSorting] = useState<SortingState>([])
   const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([])
   const [globalFilter, setGlobalFilter] = useState('')
@@ -62,16 +63,23 @@ export function SongTable({ filters = {}, currentPlaylist, onSongAddedToPlaylist
     onSongAddedToPlaylist?.()
   }
 
-  // Fetch songs with filters
+  // Fetch songs with query
+  console.log('🎵 SongTable query:', query)
+  
   const {
     data: songs = [],
     isLoading,
     error,
     refetch,
   } = useQuery({
-    queryKey: ['songs', filters],
-    queryFn: () => songsApi.getSongs(filters),
+    queryKey: ['songs', query],
+    queryFn: () => {
+      console.log('📡 Fetching songs with query:', query)
+      return songsApi.getSongs(query)
+    },
   })
+  
+  console.log('📊 Songs fetched:', { count: songs.length, isLoading, error })
 
   // Format duration from seconds to mm:ss
   const formatDuration = (seconds: number | null): string => {
