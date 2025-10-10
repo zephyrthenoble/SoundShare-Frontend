@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { Card, List, Typography, Switch, Select, Button, Space, Spin } from 'antd'
 import { Shuffle, Repeat, Play, Pause, SkipForward, SkipBack, GripVertical } from 'lucide-react'
@@ -86,23 +86,24 @@ export function QueueColumn({ currentPlaylist }: QueueColumnProps) {
   // Fetch all songs for queue generation
   const {
     data: allSongs = [],
-    isLoading: songsLoading
+    isLoading: songsLoading,
+    isSuccess: songsLoaded
   } = useQuery({
     queryKey: ['songs'],
     queryFn: () => songsApi.getSongs(),
   })
 
-  // Generate queue when playlist or songs change
+  // Generate queue when playlist changes or when songs are successfully loaded
   useEffect(() => {
-    if (currentPlaylist && allSongs.length > 0) {
+    if (currentPlaylist && songsLoaded && allSongs.length > 0) {
       const generatedQueue = FilterProcessor.generateQueue(currentPlaylist, allSongs)
       setQueueItems(generatedQueue)
       setCurrentPosition(0)
-    } else {
+    } else if (!currentPlaylist) {
       setQueueItems([])
       setCurrentPosition(0)
     }
-  }, [currentPlaylist, allSongs])
+  }, [currentPlaylist?.id, currentPlaylist?.filters, songsLoaded])
 
   // Mark current song in queue
   useEffect(() => {
