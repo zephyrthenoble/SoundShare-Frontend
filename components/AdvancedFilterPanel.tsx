@@ -27,7 +27,7 @@ import { QueryBuilderDnD } from '@react-querybuilder/dnd'
 import * as ReactDnD from 'react-dnd'
 import * as ReactDndHtml5Backend from 'react-dnd-html5-backend'
 import * as ReactDndTouchBackend from 'react-dnd-touch-backend'
-import { QueryBuilder, RuleGroupType, Field } from 'react-querybuilder'
+import { QueryBuilder, RuleGroupType, Field, formatQuery } from 'react-querybuilder'
 
 
 const { Title } = Typography
@@ -53,8 +53,8 @@ const convertQueryJSONToRuleGroup = (queryJSON: QueryJSON): RuleGroupType => {
 }
 
 interface AdvancedFilterPanelProps {
-  filters: QueryJSON | null
-  onFiltersChange: (query: QueryJSON | null) => void
+  filters: QueryJSON | string | null
+  onFiltersChange: (query: QueryJSON | string | null) => void
 }
 
 export const AdvancedFilterPanel = React.memo(function AdvancedFilterPanel({ filters, onFiltersChange }: AdvancedFilterPanelProps) {
@@ -115,6 +115,14 @@ export const AdvancedFilterPanel = React.memo(function AdvancedFilterPanel({ fil
         }
         console.log('🔄 Converted QueryJSON to RuleGroupType:', convertedQuery)
         setQuery(convertedQuery)
+      } else if (typeof filters === 'string') {
+        // SQL query - for now, we can't convert back to QueryBuilder format
+        // so we'll start with empty query (user will need to rebuild)
+        console.log('🔄 Received SQL query, starting with empty QueryBuilder')
+        setQuery({
+          combinator: 'and',
+          rules: []
+        } as RuleGroupType)
       } else {
         // No filters, use empty query
         setQuery({
@@ -303,14 +311,34 @@ export const AdvancedFilterPanel = React.memo(function AdvancedFilterPanel({ fil
       activeTab
     })
     
-    // If we're on the advanced tab, convert the current query to JSON
+    // If we're on the advanced tab, convert the current query to SQL
     if (activeTab === 'advanced') {
-      const queryJSON = convertQueryToJSON(query)
-      console.log('🔄 Converting query to JSON:', queryJSON)
-      
-      // Set flag to prevent useEffect from overwriting when parent updates filters prop
-      isQueryBuilderUpdate.current = true
-      onFiltersChange(queryJSON)
+      // Check if the query has any meaningful rules
+      const hasValidRules = query.rules?.some((rule: any) => {
+        if ('rules' in rule) {
+          // It's a nested group, check if it has rules
+          return rule.rules?.length > 0
+        } else {
+          // It's a rule, check if it has meaningful content
+          return rule.field && (rule.value !== undefined && rule.value !== '' && rule.value !== null)
+        }
+      })
+
+      if (!hasValidRules) {
+        console.log('🔄 No valid rules found, sending null (will return all songs)')
+        // Set flag to prevent useEffect from overwriting when parent updates filters prop
+        isQueryBuilderUpdate.current = true
+        onFiltersChange(null)
+      } else {
+        // Generate SQL condition using react-querybuilder
+        const sqlCondition = formatQuery(query, 'sql')
+        console.log('🔄 Generated SQL condition:', sqlCondition)
+
+        
+        // Set flag to prevent useEffect from overwriting when parent updates filters prop
+        isQueryBuilderUpdate.current = true
+        onFiltersChange(sqlCondition)
+      }
     } else {
       // Simple filters - for now just send null (user needs to use advanced tab)
       onFiltersChange(null)

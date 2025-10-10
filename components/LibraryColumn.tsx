@@ -25,7 +25,7 @@ export function LibraryColumn({
   onFilterSaved,
   onSongAddedToPlaylist
 }: LibraryColumnProps) {
-  const [query, setQuery] = useState<QueryJSON | null>(null)
+  const [query, setQuery] = useState<QueryJSON | string | null>(null)
   const [filterName, setFilterName] = useState('')
   const [showQueryBuilder, setShowQueryBuilder] = useState(false)
   const [activeKeys, setActiveKeys] = useState<string[]>([])
@@ -44,7 +44,10 @@ export function LibraryColumn({
   }, [editingFilter])
 
   // Check if we have any active filters
-  const hasActiveQuery = query !== null && (query.rules.length > 0 || query.groups.length > 0)
+  const hasActiveQuery = query !== null && (
+    typeof query === 'string' ? query.trim().length > 0 : 
+    (query.rules.length > 0 || query.groups.length > 0)
+  )
 
   const saveFilterToPlaylist = () => {
     if (!currentPlaylist) {
@@ -103,7 +106,7 @@ export function LibraryColumn({
     setShowQueryBuilder(true)
   }
 
-  const handleQueryChange = (newQuery: QueryJSON | null) => {
+  const handleQueryChange = (newQuery: QueryJSON | string | null) => {
     setQuery(newQuery)
   }
 

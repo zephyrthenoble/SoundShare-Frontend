@@ -147,12 +147,21 @@ async function apiRequest<T>(
 }
 
 export const songsApi = {
-  // Get all songs with optional query filter
-  getSongs: async (query?: any): Promise<Song[]> => {
-    return apiRequest<Song[]>('/songs', {
+  // Get all songs with optional SQL query filter
+  getSongs: async (sqlQuery?: string): Promise<Song[]> => {
+    const response = await fetch(`${API_BASE_URL}/songs`, {
       method: 'POST',
-      body: JSON.stringify(query || {}),
+      headers: {
+        'Content-Type': 'text/plain',
+      },
+      body: sqlQuery || '',
     })
+
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`)
+    }
+
+    return response.json()
   },
 
   // Add tag to song

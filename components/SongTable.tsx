@@ -27,7 +27,7 @@ const { Title } = Typography
 const { Search } = Input
 
 interface SongTableProps {
-  query?: QueryJSON | null
+  query?: QueryJSON | string | null
   currentPlaylist?: Playlist | null
   onSongAddedToPlaylist?: () => void
 }
@@ -75,7 +75,17 @@ export function SongTable({ query = null, currentPlaylist, onSongAddedToPlaylist
     queryKey: ['songs', query],
     queryFn: () => {
       console.log('📡 Fetching songs with query:', query)
-      return songsApi.getSongs(query)
+      // Convert query to SQL format if needed
+      let sqlQuery: string | undefined
+      if (typeof query === 'string') {
+        sqlQuery = query
+      } else if (query === null) {
+        sqlQuery = undefined // No filter, get all songs
+      } else {
+        // QueryJSON format - for now, we'll skip this case since we're moving to SQL
+        sqlQuery = undefined
+      }
+      return songsApi.getSongs(sqlQuery)
     },
   })
   
