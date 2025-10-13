@@ -24,6 +24,7 @@ import { fetchQueryBuilderFields, defaultQueryBuilderConfig } from '@/lib/queryB
 import { convertQueryToJSON, QueryJSON, generateRuleId } from '@/lib/queryBuilderUtils'
 
 import { QueryBuilderDnD } from '@react-querybuilder/dnd'
+import { QueryBuilderAntD } from '@react-querybuilder/antd'
 import * as ReactDnD from 'react-dnd'
 import * as ReactDndHtml5Backend from 'react-dnd-html5-backend'
 import * as ReactDndTouchBackend from 'react-dnd-touch-backend'
@@ -232,37 +233,6 @@ export const AdvancedFilterPanel = React.memo(function AdvancedFilterPanel({ fil
     <div className="space-y-4">
       <div className="text-sm text-gray-600 mb-4">
         Build complex queries using multiple conditions and logical operators. Changes are applied automatically.
-      </div>
-      
-      {/* Debug Info */}
-      <div className="bg-gray-100 p-3 rounded text-xs font-mono">
-        <div><strong>Debug Info:</strong></div>
-        <div>Query Rules: {query.rules?.length || 0}</div>
-        <div>Combinator: {query.combinator}</div>
-        <div>Not: {query.not ? 'true' : 'false'}</div>
-        <div>Fields Available: {fields.length}</div>
-        <div className="mt-2">
-          <button 
-            onClick={() => {
-              console.log('🧪 Test button clicked - DOM interaction working')
-              const addRuleBtn = document.querySelector('.ruleGroup-addRule')
-              const addGroupBtn = document.querySelector('.ruleGroup-addGroup')
-              const notToggle = document.querySelector('[title*="Not"]')
-              console.log('🔍 DOM Elements found:', {
-                addRuleBtn: !!addRuleBtn,
-                addGroupBtn: !!addGroupBtn,
-                notToggle: !!notToggle
-              })
-            }}
-            className="bg-blue-500 text-white px-2 py-1 rounded text-xs"
-          >
-            Test DOM Interaction
-          </button>
-        </div>
-        <details>
-          <summary>Full Query Object</summary>
-          <pre>{JSON.stringify(query, null, 2)}</pre>
-        </details>
       </div>
       
       {fieldsLoading ? (

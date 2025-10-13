@@ -6,6 +6,7 @@ import { Music } from 'lucide-react'
 import { PlaylistColumn } from '@/components/PlaylistColumn'
 import { LibraryColumn } from '@/components/LibraryColumn'
 import { QueueColumn } from '@/components/QueueColumn'
+import { DebugPanel } from '@/components/DebugPanel'
 import { MusicPlayer } from '@/components/MusicPlayer'
 import { useMusicPlayer } from '@/lib/music-context'
 import type { SongsFilters } from '@/lib/api'
@@ -19,6 +20,7 @@ export default function Home() {
   const [currentPlaylist, setCurrentPlaylist] = useState<Playlist | null>(null)
   const [editingFilter, setEditingFilter] = useState<PlaylistFilter | null>(null)
   const [activeKeys, setActiveKeys] = useState<string[]>(['playlist', 'queue'])
+  const [currentQuery, setCurrentQuery] = useState<any>(null) // Track current filter query for debug panel
   const { currentSong, isPlayerVisible, closePlayer } = useMusicPlayer()
 
   const handlePlaylistChange = (playlist: Playlist | null) => {
@@ -104,6 +106,22 @@ export default function Home() {
                         </div>
                       ),
                     },
+                    {
+                      key: 'debug',
+                      label: (
+                        <div className="flex items-center justify-between w-full">
+                          <span className="font-medium">🔧 Debug Tools</span>
+                          <span className="text-xs text-gray-500">
+                            Developer & Power User Tools
+                          </span>
+                        </div>
+                      ),
+                      children: (
+                        <div className="h-full">
+                          <DebugPanel currentQuery={currentQuery} />
+                        </div>
+                      ),
+                    },
                   ]}
                 />
               </div>
@@ -114,6 +132,7 @@ export default function Home() {
                 editingFilter={editingFilter}
                 onFilterSaved={handleFilterSaved}
                 onSongAddedToPlaylist={handleSongAddedToPlaylist}
+                onQueryChange={setCurrentQuery}
               />
             </Col>
           </Row>

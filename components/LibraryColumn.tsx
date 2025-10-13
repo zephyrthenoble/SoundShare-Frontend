@@ -17,13 +17,15 @@ interface LibraryColumnProps {
   editingFilter: PlaylistFilter | null
   onFilterSaved: (filter: PlaylistFilter | null) => void
   onSongAddedToPlaylist: () => void
+  onQueryChange?: (query: QueryJSON | string | null) => void
 }
 
 export function LibraryColumn({
   currentPlaylist,
   editingFilter,
   onFilterSaved,
-  onSongAddedToPlaylist
+  onSongAddedToPlaylist,
+  onQueryChange
 }: LibraryColumnProps) {
   const [query, setQuery] = useState<QueryJSON | string | null>(null)
   const [filterName, setFilterName] = useState('')
@@ -42,6 +44,11 @@ export function LibraryColumn({
       setShowQueryBuilder(false)
     }
   }, [editingFilter])
+
+  // Notify parent when query changes
+  useEffect(() => {
+    onQueryChange?.(query)
+  }, [query, onQueryChange])
 
   // Check if we have any active filters
   const hasActiveQuery = query !== null && (

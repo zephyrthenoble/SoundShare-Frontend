@@ -93,10 +93,7 @@
   border: 2px solid #ff7a45 !important;
 }
 
-/* Debug styles to make query builder structure visible */
-.queryBuilder-branches {
-  border: 3px dashed #52c41a !important;
-}
+
 
 .ruleGroup {
   border: 2px solid #1677ff !important;
