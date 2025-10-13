@@ -1,10 +1,20 @@
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api'
 
+export interface SongPath {
+  id: number
+  song_id: number
+  file_path: string
+  filename: string
+  is_primary: boolean
+  file_exists: boolean
+  created_at: string | null
+  updated_at: string | null
+}
+
 export interface Song {
   id: number
-  filename: string
+  fingerprint: string
   display_name: string
-  file_path: string
   duration: number | null
   file_size: number | null
   tempo: number | null
@@ -22,6 +32,7 @@ export interface Song {
   created_at: string | null
   updated_at: string | null
   tags: Tag[]
+  file_paths: SongPath[]
 }
 
 export interface Tag {

@@ -1,10 +1,10 @@
 'use client'
 
 import { useState } from 'react'
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { Tag, Input, Button, Space, AutoComplete, App } from 'antd'
 import { Plus, X } from 'lucide-react'
-import { songsApi, tagsApi, type Song, type Tag as TagType } from '@/lib/api'
+import { type Song, type Tag as TagType } from '@/lib/api'
+import { useTags, useTagMutations } from '@/lib/hooks/useCachedApi'
 
 interface EditableTagCellProps {
   song: Song
@@ -14,54 +14,48 @@ interface EditableTagCellProps {
 export function EditableTagCell({ song, onTagUpdate }: EditableTagCellProps) {
   const [isEditing, setIsEditing] = useState(false)
   const [inputValue, setInputValue] = useState('')
-  const queryClient = useQueryClient()
   const { message } = App.useApp()
 
-  // Get all available tags for autocomplete
-  const { data: allTags = [] } = useQuery({
-    queryKey: ['tags'],
-    queryFn: tagsApi.getTags,
-  })
+  // Get all available tags for autocomplete with caching
+  const { data: allTags = [] } = useTags()
 
-  // Add tag mutation
-  const addTagMutation = useMutation({
-    mutationFn: (tagName: string) => songsApi.addTagToSong(song.id, tagName),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['songs'] })
-      queryClient.invalidateQueries({ queryKey: ['tags'] })
-      onTagUpdate()
-      message.success('Tag added successfully')
-      setInputValue('')
-      setIsEditing(false)
-    },
-    onError: (error) => {
-      console.error('Failed to add tag:', error)
-      message.error('Failed to add tag')
-    },
-  })
-
-  // Remove tag mutation
-  const removeTagMutation = useMutation({
-    mutationFn: (tagId: number) => songsApi.removeTagFromSong(song.id, tagId),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['songs'] })
-      onTagUpdate()
-      message.success('Tag removed successfully')
-    },
-    onError: (error) => {
-      console.error('Failed to remove tag:', error)
-      message.error('Failed to remove tag')
-    },
-  })
+  // Use cached tag mutations
+  const { addTagToSong, removeTagFromSong } = useTagMutations()
 
   const handleAddTag = () => {
     if (inputValue.trim()) {
-      addTagMutation.mutate(inputValue.trim())
+      addTagToSong.mutate(
+        { songId: song.id, tagName: inputValue.trim() },
+        {
+          onSuccess: () => {
+            onTagUpdate()
+            message.success('Tag added successfully')
+            setInputValue('')
+            setIsEditing(false)
+          },
+          onError: (error: any) => {
+            console.error('Failed to add tag:', error)
+            message.error('Failed to add tag')
+          },
+        }
+      )
     }
   }
 
   const handleRemoveTag = (tagId: number) => {
-    removeTagMutation.mutate(tagId)
+    removeTagFromSong.mutate(
+      { songId: song.id, tagId },
+      {
+        onSuccess: () => {
+          onTagUpdate()
+          message.success('Tag removed successfully')
+        },
+        onError: (error: any) => {
+          console.error('Failed to remove tag:', error)
+          message.error('Failed to remove tag')
+        },
+      }
+    )
   }
 
   const handleKeyPress = (e: React.KeyboardEvent) => {
@@ -116,7 +110,7 @@ export function EditableTagCell({ song, onTagUpdate }: EditableTagCellProps) {
             size="small"
             icon={<Plus size={12} />}
             onClick={handleAddTag}
-            loading={addTagMutation.isPending}
+            loading={addTagToSong.isPending}
             disabled={!inputValue.trim()}
           />
           <Button

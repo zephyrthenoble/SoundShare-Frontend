@@ -1,7 +1,6 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { useQuery } from '@tanstack/react-query'
 import {
   flexRender,
   getCoreRowModel,
@@ -15,8 +14,9 @@ import {
   type PaginationState,
 } from '@tanstack/react-table'
 import { Table, Tag, Button, Input, Space, Card, Typography, Spin, Alert, Select } from 'antd'
-import { PlayCircle, Music, Clock, Hash, Calendar, User, Disc, FolderOpen, ChevronLeft, ChevronRight, Plus } from 'lucide-react'
-import { songsApi, type Song } from '@/lib/api'
+import { PlayCircle, Music, Clock, Hash, Calendar, User, Disc, FolderOpen, ChevronLeft, ChevronRight, Plus, RefreshCw } from 'lucide-react'
+import { type Song } from '@/lib/api'
+import { useSongs, useSongsCacheManager, useOptimisticFiltering, useTagMutations } from '@/lib/hooks/useCachedApi'
 import type { QueryJSON } from '@/lib/queryBuilderUtils'
 import { EditableTagCell } from './EditableTagCell'
 import { useMusicPlayer } from '@/lib/music-context'
@@ -66,30 +66,49 @@ export function SongTable({ query = null, currentPlaylist, onSongAddedToPlaylist
   // Fetch songs with query
   console.log('🎵 SongTable query:', query)
   
+  // Convert query to SQL format if needed
+  const getSqlQuery = (): string | undefined => {
+    if (typeof query === 'string') {
+      return query
+    } else if (query === null) {
+      return undefined // No filter, get all songs
+    } else {
+      // QueryJSON format - for now, we'll skip this case since we're moving to SQL
+      return undefined
+    }
+  }
+
+  const sqlQuery = getSqlQuery()
+  
+  // Use cached songs hook with optimistic filtering
+  const cacheManager = useSongsCacheManager()
+  const optimisticFiltering = useOptimisticFiltering()
+  
+  // Try optimistic filtering first for instant results
+  let optimisticSongs: Song[] | null = null
+  if (sqlQuery) {
+    optimisticSongs = optimisticFiltering.filterSongsLocally(sqlQuery)
+  }
+  
+  // Fetch songs with enhanced caching
   const {
     data: songs = [],
     isLoading,
     error,
     refetch,
-  } = useQuery({
-    queryKey: ['songs', query],
-    queryFn: () => {
-      console.log('📡 Fetching songs with query:', query)
-      // Convert query to SQL format if needed
-      let sqlQuery: string | undefined
-      if (typeof query === 'string') {
-        sqlQuery = query
-      } else if (query === null) {
-        sqlQuery = undefined // No filter, get all songs
-      } else {
-        // QueryJSON format - for now, we'll skip this case since we're moving to SQL
-        sqlQuery = undefined
-      }
-      return songsApi.getSongs(sqlQuery)
-    },
-  })
+    isFetching,
+  } = useSongs(sqlQuery)
   
-  console.log('📊 Songs fetched:', { count: songs.length, isLoading, error })
+  // Use optimistic results if available and still loading
+  const displaySongs = optimisticSongs && isLoading ? optimisticSongs : songs
+  
+  console.log('📊 Songs fetched:', { 
+    count: displaySongs.length, 
+    isLoading, 
+    isFetching,
+    usingOptimistic: !!optimisticSongs && isLoading,
+    error 
+  })
 
   // Format duration from seconds to mm:ss
   const formatDuration = (seconds: number | null): string => {
@@ -112,9 +131,11 @@ export function SongTable({ query = null, currentPlaylist, onSongAddedToPlaylist
     const song = row.original as Song
 
     // Search in basic fields
+    const primaryFilename = song.file_paths?.find(p => p.is_primary)?.filename || 
+                           song.file_paths?.[0]?.filename || ''
     const searchableText = [
       song.display_name,
-      song.filename,
+      primaryFilename,
       song.artist,
       song.album,
       song.genre,
@@ -134,7 +155,11 @@ export function SongTable({ query = null, currentPlaylist, onSongAddedToPlaylist
           <Music size={16} className="text-gray-400" />
           <div>
             <div className="font-medium text-sm">{row.original.display_name}</div>
-            <div className="text-xs text-gray-500">{row.original.filename}</div>
+            <div className="text-xs text-gray-500">
+              {row.original.file_paths?.find(p => p.is_primary)?.filename || 
+               row.original.file_paths?.[0]?.filename || 
+               'No file'}
+            </div>
           </div>
         </div>
       ),
@@ -176,7 +201,7 @@ export function SongTable({ query = null, currentPlaylist, onSongAddedToPlaylist
       cell: ({ getValue }) => (
         <div className="flex items-center space-x-2">
           <Calendar size={14} className="text-gray-400" />
-          <span className="text-sm">{getValue() || '--'}</span>
+          <span className="text-sm">{(getValue() as number) || '--'}</span>
         </div>
       ),
       size: 80,
@@ -233,7 +258,7 @@ export function SongTable({ query = null, currentPlaylist, onSongAddedToPlaylist
   ]
 
   const table = useReactTable({
-    data: songs,
+    data: displaySongs,
     columns,
     getCoreRowModel: getCoreRowModel(),
     getSortedRowModel: getSortedRowModel(),
@@ -273,16 +298,37 @@ export function SongTable({ query = null, currentPlaylist, onSongAddedToPlaylist
     <div className="w-full space-y-4">
       <Card>
         <div className="flex justify-between items-center mb-4">
-          <Title level={3} className="!mb-0">
-            Music Library ({songs.length} songs)
-          </Title>
-          <Search
-            placeholder="Search songs, artists, albums, tags..."
-            allowClear
-            style={{ width: 350 }}
-            onChange={(e) => setGlobalFilter(e.target.value)}
-            value={globalFilter}
-          />
+          <div className="flex items-center gap-4">
+            <Title level={3} className="!mb-0">
+              Music Library ({displaySongs.length} songs)
+            </Title>
+            {isFetching && !isLoading && (
+              <div className="flex items-center gap-2 text-sm text-gray-500">
+                <Spin size="small" />
+                <span>Refreshing...</span>
+              </div>
+            )}
+            {optimisticSongs && isLoading && (
+              <div className="flex items-center gap-2 text-sm text-blue-500">
+                <span>⚡ Instant results</span>
+              </div>
+            )}
+          </div>
+          <div className="flex items-center gap-2">
+            <Button
+              icon={<RefreshCw size={16} />}
+              onClick={() => refetch()}
+              loading={isFetching}
+              title="Refresh library"
+            />
+            <Search
+              placeholder="Search songs, artists, albums, tags..."
+              allowClear
+              style={{ width: 350 }}
+              onChange={(e) => setGlobalFilter(e.target.value)}
+              value={globalFilter}
+            />
+          </div>
         </div>
 
         {isLoading ? (
