@@ -38,6 +38,9 @@ export async function fetchQueryBuilderFields(): Promise<Field[]> {
   try {
     const response = await queryBuilderApi.getFields()
     return response.fields.map(convertBackendFieldToReactQueryBuilder)
+
+    const fieldstuff = {"fields":response}
+    console.log(fieldstuff)
   } catch (error) {
     console.error('Failed to fetch QueryBuilder fields:', error)
     // Fallback to static fields if backend fails

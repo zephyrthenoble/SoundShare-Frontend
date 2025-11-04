@@ -197,36 +197,6 @@ export const AdvancedFilterPanel = React.memo(function AdvancedFilterPanel({ fil
     console.log('🔍 Setting query state to:', newQuery)
     setQuery(newQuery)
     
-    // NOTE: We no longer auto-convert on query change
-    // Users must click "Apply Filters" button to update
-    // This prevents unnecessary API calls while building complex queries
-    
-    /*
-    // Only convert and update filters if the query has meaningful content
-    const hasValidRules = newQuery.rules?.some((rule: any) => {
-      if ('rules' in rule) {
-        return rule.rules?.length > 0
-      } else {
-        return rule.field && (rule.value !== undefined && rule.value !== '')
-      }
-    })
-    
-    if (hasValidRules) {
-      const newFilters = convertQueryToJSON(newQuery)
-      console.log('🎯 Converted JSON from query (has valid rules):', newFilters)
-      
-      // Set flag to prevent useEffect loop when updating from query builder
-      isQueryBuilderUpdate.current = true
-      
-      console.log('🔍 Calling debounced onFiltersChange with converted query:', newFilters)
-      debouncedOnFiltersChange(newFilters)
-      
-      // Reset flag after a short delay to allow for external updates
-      setTimeout(() => {
-        isQueryBuilderUpdate.current = false
-      }, 100)
-    }
-    */
   }
 
   const queryBuilderContent = (

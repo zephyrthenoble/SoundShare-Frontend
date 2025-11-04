@@ -18,6 +18,7 @@ interface LibraryColumnProps {
   onFilterSaved: (filter: PlaylistFilter | null) => void
   onSongAddedToPlaylist: () => void
   onQueryChange?: (query: QueryJSON | string | null) => void
+  isExpanded?: boolean
 }
 
 export function LibraryColumn({
@@ -25,7 +26,8 @@ export function LibraryColumn({
   editingFilter,
   onFilterSaved,
   onSongAddedToPlaylist,
-  onQueryChange
+  onQueryChange,
+  isExpanded = false
 }: LibraryColumnProps) {
   const [query, setQuery] = useState<QueryJSON | string | null>(null)
   const [filterName, setFilterName] = useState('')
@@ -217,6 +219,7 @@ export function LibraryColumn({
               query={query}
               currentPlaylist={currentPlaylist}
               onSongAddedToPlaylist={onSongAddedToPlaylist}
+              isExpanded={isExpanded}
             />
           )}
         </Space>

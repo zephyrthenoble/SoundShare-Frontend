@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import {
   flexRender,
   getCoreRowModel,
@@ -12,9 +12,10 @@ import {
   type SortingState,
   type ColumnFiltersState,
   type PaginationState,
+  type VisibilityState,
 } from '@tanstack/react-table'
-import { Table, Tag, Button, Input, Space, Card, Typography, Spin, Alert, Select } from 'antd'
-import { PlayCircle, Music, Clock, Hash, Calendar, User, Disc, FolderOpen, ChevronLeft, ChevronRight, Plus, RefreshCw } from 'lucide-react'
+import { Button, Input, Space, Card, Typography, Spin, Alert, Select, Modal, Checkbox, List, Tooltip } from 'antd'
+import { PlayCircle, Music, Clock, Calendar, User, Disc, FolderOpen, ChevronLeft, ChevronRight, Plus, RefreshCw, SlidersHorizontal, ArrowUp, ArrowDown, Gauge, ActivitySquare, Hash } from 'lucide-react'
 import { type Song } from '@/lib/api'
 import { useSongs, useSongsCacheManager, useOptimisticFiltering, useTagMutations } from '@/lib/hooks/useCachedApi'
 import type { QueryJSON } from '@/lib/queryBuilderUtils'
@@ -30,11 +31,34 @@ interface SongTableProps {
   query?: QueryJSON | string | null
   currentPlaylist?: Playlist | null
   onSongAddedToPlaylist?: () => void
+  isExpanded?: boolean
 }
 
 
+const buildDefaultVisibility = (expanded: boolean): VisibilityState => ({
+  display_name: true,
+  artist: true,
+  album: true,
+  genre: true,
+  year: true,
+  duration: true,
+  tags: true,
+  tempo: expanded,
+  energy: expanded,
+  valence: expanded,
+  danceability: expanded,
+  file_size: expanded,
+  last_played: expanded,
+  created_at: false,
+  track_number: false,
+  key: false,
+  mode: false,
+  actions: true,
+})
 
-export function SongTable({ query = null, currentPlaylist, onSongAddedToPlaylist }: SongTableProps) {
+
+
+export function SongTable({ query = null, currentPlaylist, onSongAddedToPlaylist, isExpanded = false }: SongTableProps) {
   const [sorting, setSorting] = useState<SortingState>([])
   const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([])
   const [globalFilter, setGlobalFilter] = useState('')
@@ -42,6 +66,11 @@ export function SongTable({ query = null, currentPlaylist, onSongAddedToPlaylist
     pageIndex: 0,
     pageSize: 25,
   })
+  const [columnVisibility, setColumnVisibility] = useState<VisibilityState>(() => buildDefaultVisibility(isExpanded))
+  const [hasCustomVisibility, setHasCustomVisibility] = useState(false)
+  const [columnOrder, setColumnOrder] = useState<string[]>([])
+  const [hasCustomOrdering, setHasCustomOrdering] = useState(false)
+  const [isColumnModalOpen, setIsColumnModalOpen] = useState(false)
   const { playSong } = useMusicPlayer()
 
   const addSongToPlaylist = (song: Song) => {
@@ -110,6 +139,12 @@ export function SongTable({ query = null, currentPlaylist, onSongAddedToPlaylist
     error 
   })
 
+  useEffect(() => {
+    if (!hasCustomVisibility) {
+      setColumnVisibility(buildDefaultVisibility(isExpanded))
+    }
+  }, [isExpanded, hasCustomVisibility])
+
   // Format duration from seconds to mm:ss
   const formatDuration = (seconds: number | null): string => {
     if (!seconds) return '--:--'
@@ -123,6 +158,21 @@ export function SongTable({ query = null, currentPlaylist, onSongAddedToPlaylist
     if (!bytes) return '--'
     const mb = bytes / (1024 * 1024)
     return `${mb.toFixed(1)} MB`
+  }
+
+  const formatPercentage = (value: number | null): string => {
+    if (value === null || value === undefined) return '--'
+    return `${Math.round(value * 100)}%`
+  }
+
+  const formatDateTime = (value: string | null): string => {
+    if (!value) return '--'
+    const date = new Date(value)
+    if (Number.isNaN(date.getTime())) return '--'
+    return date.toLocaleString(undefined, {
+      dateStyle: 'medium',
+      timeStyle: 'short',
+    })
   }
 
   // Custom global filter that includes tags

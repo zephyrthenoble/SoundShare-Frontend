@@ -17,16 +17,7 @@ export function CachePreloader() {
         
         // Prefetch all songs
         await cacheManager.prefetchAllSongs()
-        
-        // Prefetch common filters that users might use
-        const commonQueries = [
-          // Popular filters that might be cached
-          "SELECT * FROM songs WHERE genre LIKE '%Rock%' ORDER BY display_name",
-          "SELECT * FROM songs WHERE year > 2000 ORDER BY year DESC",
-          "SELECT * FROM songs ORDER BY last_played DESC LIMIT 50", // Recent songs
-        ]
-        
-        await cacheManager.prefetchCommonFilters(commonQueries)
+
         
         console.log('✅ Cache preloading completed')
       } catch (error) {
