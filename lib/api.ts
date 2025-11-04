@@ -32,7 +32,8 @@ export interface Song {
   created_at: string | null
   updated_at: string | null
   tags: Tag[]
-  file_paths: SongPath[]
+  file_paths?: SongPath[]
+  file_path?: string
 }
 
 export interface Tag {

@@ -34,6 +34,7 @@ export function Providers({ children }: { children: React.ReactNode }) {
           algorithm: theme.defaultAlgorithm,
           token: {
             colorPrimary: '#1677ff',
+            fontFamily: "var(--font-noto-sans), var(--font-geist-sans), sans-serif",
           },
         }}
       >

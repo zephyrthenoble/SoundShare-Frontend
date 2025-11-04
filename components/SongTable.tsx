@@ -13,6 +13,7 @@ import {
   type ColumnFiltersState,
   type PaginationState,
   type VisibilityState,
+  type Column,
 } from '@tanstack/react-table'
 import { Button, Input, Space, Card, Typography, Spin, Alert, Select, Modal, Checkbox, List, Tooltip } from 'antd'
 import { PlayCircle, Music, Clock, Calendar, User, Disc, FolderOpen, ChevronLeft, ChevronRight, Plus, RefreshCw, SlidersHorizontal, ArrowUp, ArrowDown, Gauge, ActivitySquare, Hash } from 'lucide-react'
@@ -55,6 +56,10 @@ const buildDefaultVisibility = (expanded: boolean): VisibilityState => ({
   mode: false,
   actions: true,
 })
+
+const arraysEqual = (a: string[], b: string[]) => (
+  a.length === b.length && a.every((value, index) => value === b[index])
+)
 
 
 
@@ -175,16 +180,47 @@ export function SongTable({ query = null, currentPlaylist, onSongAddedToPlaylist
     })
   }
 
+  const extractFilename = (value: string | null | undefined): string | null => {
+    if (!value) return null
+    const normalized = value.trim()
+    if (!normalized) return null
+    const parts = normalized.split(/[/\\]/)
+    const filename = parts.pop()
+    return filename && filename.trim().length > 0 ? filename : normalized
+  }
+
+  const getPrimaryPathEntry = (song: Song) => {
+    const fromList = song.file_paths?.find((path) => path.is_primary) || song.file_paths?.[0]
+    return fromList || null
+  }
+
+  const getSongFullPath = (song: Song): string | null => {
+    const primaryEntry = getPrimaryPathEntry(song)
+    if (primaryEntry?.file_path) return primaryEntry.file_path
+    return song.file_path ?? null
+  }
+
+  const getSongFilename = (song: Song): string | null => {
+    const primaryEntry = getPrimaryPathEntry(song)
+    if (primaryEntry?.filename) {
+      const trimmed = primaryEntry.filename.trim()
+      if (trimmed) return trimmed
+    }
+    const fromPath = extractFilename(primaryEntry?.file_path || song.file_path)
+    return fromPath
+  }
+
   // Custom global filter that includes tags
   const globalFilterFn = (row: any, columnId: string, value: string) => {
     const search = value.toLowerCase()
     const song = row.original as Song
 
     // Search in basic fields
-    const primaryFilename = song.file_paths?.find(p => p.is_primary)?.filename || 
-                           song.file_paths?.[0]?.filename || ''
+    const primaryFilename = getSongFilename(song) || ''
+    const primaryPath = getSongFullPath(song) || ''
     const searchableText = [
       song.display_name,
+      primaryPath,
       primaryFilename,
       song.artist,
       song.album,
@@ -196,58 +232,74 @@ export function SongTable({ query = null, currentPlaylist, onSongAddedToPlaylist
     return searchableText.includes(search)
   }
 
-  const columns: ColumnDef<Song>[] = [
+  const columns = useMemo<ColumnDef<Song>[]>(() => [
     {
+      id: 'display_name',
       accessorKey: 'display_name',
       header: 'Song',
-      cell: ({ row }) => (
-        <div className="flex items-center space-x-2">
-          <Music size={16} className="text-gray-400" />
-          <div>
-            <div className="font-medium text-sm">{row.original.display_name}</div>
-            <div className="text-xs text-gray-500">
-              {row.original.file_paths?.find(p => p.is_primary)?.filename || 
-               row.original.file_paths?.[0]?.filename || 
-               'No file'}
+      meta: { title: 'Song' },
+      enableHiding: false,
+      size: 260,
+      cell: ({ row }) => {
+        const filename = getSongFilename(row.original)
+        const filePath = getSongFullPath(row.original)
+
+        return (
+          <div className="flex items-center space-x-2">
+            <Music size={16} className="text-gray-400" />
+            <div>
+              <div className="font-medium text-sm">{row.original.display_name}</div>
+              <Tooltip title={filePath || undefined}>
+                <div className="text-xs text-gray-500 truncate max-w-[240px]">
+                  {filename || 'File path unavailable'}
+                </div>
+              </Tooltip>
             </div>
           </div>
-        </div>
-      ),
-      minSize: 250,
+        )
+      },
     },
     {
+      id: 'artist',
       accessorKey: 'artist',
       header: 'Artist',
+      meta: { title: 'Artist' },
       cell: ({ getValue }) => (
         <div className="flex items-center space-x-2">
           <User size={14} className="text-gray-400" />
-          <span className="text-sm">{getValue() as string || 'Unknown'}</span>
+          <span className="text-sm">{(getValue() as string) || 'Unknown'}</span>
         </div>
       ),
     },
     {
+      id: 'album',
       accessorKey: 'album',
       header: 'Album',
+      meta: { title: 'Album' },
       cell: ({ getValue }) => (
         <div className="flex items-center space-x-2">
           <Disc size={14} className="text-gray-400" />
-          <span className="text-sm">{getValue() as string || 'Unknown'}</span>
+          <span className="text-sm">{(getValue() as string) || 'Unknown'}</span>
         </div>
       ),
     },
     {
+      id: 'genre',
       accessorKey: 'genre',
       header: 'Genre',
+      meta: { title: 'Genre' },
       cell: ({ getValue }) => (
         <div className="flex items-center space-x-2">
           <FolderOpen size={14} className="text-gray-400" />
-          <span className="text-sm">{getValue() as string || 'Unknown'}</span>
+          <span className="text-sm">{(getValue() as string) || 'Unknown'}</span>
         </div>
       ),
     },
     {
+      id: 'year',
       accessorKey: 'year',
       header: 'Year',
+      meta: { title: 'Year' },
       cell: ({ getValue }) => (
         <div className="flex items-center space-x-2">
           <Calendar size={14} className="text-gray-400" />
@@ -257,8 +309,10 @@ export function SongTable({ query = null, currentPlaylist, onSongAddedToPlaylist
       size: 80,
     },
     {
+      id: 'duration',
       accessorKey: 'duration',
       header: 'Duration',
+      meta: { title: 'Duration' },
       cell: ({ getValue }) => (
         <div className="flex items-center space-x-2">
           <Clock size={14} className="text-gray-400" />
@@ -270,17 +324,149 @@ export function SongTable({ query = null, currentPlaylist, onSongAddedToPlaylist
     {
       id: 'tags',
       header: 'Tags',
+      meta: { title: 'Tags' },
+      enableSorting: false,
+      size: 220,
       cell: ({ row }) => (
         <EditableTagCell
           song={row.original}
           onTagUpdate={() => refetch()}
         />
       ),
-      minSize: 200,
+    },
+    {
+      id: 'tempo',
+      accessorKey: 'tempo',
+      header: 'Tempo (BPM)',
+      meta: { title: 'Tempo (BPM)' },
+      cell: ({ getValue }) => {
+        const value = getValue<number | null>()
+        return (
+          <div className="flex items-center space-x-2">
+            <Gauge size={14} className="text-gray-400" />
+            <span className="text-sm">{value != null ? Math.round(value) : '--'}</span>
+          </div>
+        )
+      },
+      size: 110,
+    },
+    {
+      id: 'energy',
+      accessorKey: 'energy',
+      header: 'Energy',
+      meta: { title: 'Energy' },
+      cell: ({ getValue }) => (
+        <div className="flex items-center space-x-2">
+          <ActivitySquare size={14} className="text-gray-400" />
+          <span className="text-sm">{formatPercentage(getValue<number | null>())}</span>
+        </div>
+      ),
+      size: 110,
+    },
+    {
+      id: 'valence',
+      accessorKey: 'valence',
+      header: 'Valence',
+      meta: { title: 'Valence' },
+      cell: ({ getValue }) => (
+        <div className="flex items-center space-x-2">
+          <Gauge size={14} className="text-gray-400" />
+          <span className="text-sm">{formatPercentage(getValue<number | null>())}</span>
+        </div>
+      ),
+      size: 110,
+    },
+    {
+      id: 'danceability',
+      accessorKey: 'danceability',
+      header: 'Danceability',
+      meta: { title: 'Danceability' },
+      cell: ({ getValue }) => (
+        <div className="flex items-center space-x-2">
+          <ActivitySquare size={14} className="text-gray-400" />
+          <span className="text-sm">{formatPercentage(getValue<number | null>())}</span>
+        </div>
+      ),
+      size: 130,
+    },
+    {
+      id: 'file_size',
+      accessorKey: 'file_size',
+      header: 'File Size',
+      meta: { title: 'File Size' },
+      cell: ({ getValue }) => (
+        <div className="flex items-center space-x-2">
+          <FolderOpen size={14} className="text-gray-400" />
+          <span className="text-sm">{formatFileSize(getValue<number | null>())}</span>
+        </div>
+      ),
+      size: 130,
+    },
+    {
+      id: 'track_number',
+      accessorKey: 'track_number',
+      header: 'Track #',
+      meta: { title: 'Track #' },
+      cell: ({ getValue }) => (
+        <div className="flex items-center space-x-2">
+          <Hash size={14} className="text-gray-400" />
+          <span className="text-sm">{getValue<number | null>() ?? '--'}</span>
+        </div>
+      ),
+      size: 90,
+    },
+    {
+      id: 'key',
+      accessorKey: 'key',
+      header: 'Key',
+      meta: { title: 'Key' },
+      cell: ({ getValue }) => (
+        <span className="text-sm">{(getValue() as string) || '--'}</span>
+      ),
+      size: 80,
+    },
+    {
+      id: 'mode',
+      accessorKey: 'mode',
+      header: 'Mode',
+      meta: { title: 'Mode' },
+      cell: ({ getValue }) => (
+        <span className="text-sm capitalize">{(getValue() as string) || '--'}</span>
+      ),
+      size: 90,
+    },
+    {
+      id: 'last_played',
+      accessorKey: 'last_played',
+      header: 'Last Played',
+      meta: { title: 'Last Played' },
+      cell: ({ getValue }) => (
+        <div className="flex items-center space-x-2">
+          <Clock size={14} className="text-gray-400" />
+          <span className="text-xs text-gray-600">{formatDateTime(getValue() as string | null)}</span>
+        </div>
+      ),
+      size: 180,
+    },
+    {
+      id: 'created_at',
+      accessorKey: 'created_at',
+      header: 'Added',
+      meta: { title: 'Added' },
+      cell: ({ getValue }) => (
+        <div className="flex items-center space-x-2">
+          <Calendar size={14} className="text-gray-400" />
+          <span className="text-xs text-gray-600">{formatDateTime(getValue() as string | null)}</span>
+        </div>
+      ),
+      size: 180,
     },
     {
       id: 'actions',
       header: 'Actions',
+      meta: { title: 'Actions' },
+      enableSorting: false,
+      enableHiding: false,
       cell: ({ row }) => (
         <Space>
           <Button
@@ -303,9 +489,34 @@ export function SongTable({ query = null, currentPlaylist, onSongAddedToPlaylist
           )}
         </Space>
       ),
-      size: currentPlaylist ? 120 : 60,
+      size: currentPlaylist ? 140 : 80,
     },
-  ]
+  ], [currentPlaylist, playSong, refetch])
+
+  const columnIds = useMemo(() => (
+    columns
+      .map((column) => {
+        if (column.id) return column.id
+        if ('accessorKey' in column && column.accessorKey) {
+          return column.accessorKey as string
+        }
+        return ''
+      })
+      .filter((id): id is string => id.length > 0)
+  ), [columns])
+
+  useEffect(() => {
+    setColumnOrder((prev) => {
+      const baseOrder = hasCustomOrdering
+        ? [
+            ...prev.filter((id) => columnIds.includes(id)),
+            ...columnIds.filter((id) => !prev.includes(id)),
+          ]
+        : columnIds
+
+      return arraysEqual(prev, baseOrder) ? prev : baseOrder
+    })
+  }, [columnIds, hasCustomOrdering])
 
   const table = useReactTable({
     data: displaySongs,
@@ -324,8 +535,62 @@ export function SongTable({ query = null, currentPlaylist, onSongAddedToPlaylist
       columnFilters,
       globalFilter,
       pagination,
+      columnVisibility,
+      columnOrder,
     },
+    onColumnVisibilityChange: setColumnVisibility,
+    onColumnOrderChange: setColumnOrder,
   })
+
+  const allLeafColumns = table.getAllLeafColumns() as Column<Song, unknown>[]
+  const orderedColumns = columnOrder.length
+    ? columnOrder
+        .map((id) => allLeafColumns.find((column) => column.id === id))
+        .filter((column): column is typeof allLeafColumns[number] => Boolean(column))
+    : allLeafColumns
+  const unorderedColumns = allLeafColumns.filter((column) => !orderedColumns.includes(column))
+  const modalColumns = [...orderedColumns, ...unorderedColumns]
+
+  const getColumnTitle = (column: Column<Song, unknown>) => {
+    const metaTitle = (column.columnDef.meta as { title?: string } | undefined)?.title
+    if (metaTitle) return metaTitle
+    if (typeof column.columnDef.header === 'string') {
+      return column.columnDef.header
+    }
+    return column.id
+  }
+
+  const handleColumnVisibilityToggle = (columnId: string, visible: boolean) => {
+    setHasCustomVisibility(true)
+    setColumnVisibility((prev) => ({
+      ...prev,
+      [columnId]: visible,
+    }))
+  }
+
+  const moveColumn = (columnId: string, direction: -1 | 1) => {
+    setHasCustomOrdering(true)
+    setColumnOrder((prev) => {
+      const currentIndex = prev.indexOf(columnId)
+      if (currentIndex === -1) {
+        return [...prev, columnId]
+      }
+      const targetIndex = currentIndex + direction
+      if (targetIndex < 0 || targetIndex >= prev.length) {
+        return prev
+      }
+      const next = [...prev]
+      ;[next[currentIndex], next[targetIndex]] = [next[targetIndex], next[currentIndex]]
+      return next
+    })
+  }
+
+  const resetColumns = () => {
+    setHasCustomVisibility(false)
+    setColumnVisibility(buildDefaultVisibility(isExpanded))
+    setHasCustomOrdering(false)
+    setColumnOrder(columnIds)
+  }
 
   if (error) {
     return (
@@ -365,6 +630,12 @@ export function SongTable({ query = null, currentPlaylist, onSongAddedToPlaylist
             )}
           </div>
           <div className="flex items-center gap-2">
+            <Tooltip title="Customize columns">
+              <Button
+                icon={<SlidersHorizontal size={16} />}
+                onClick={() => setIsColumnModalOpen(true)}
+              />
+            </Tooltip>
             <Button
               icon={<RefreshCw size={16} />}
               onClick={() => refetch()}
@@ -505,6 +776,57 @@ export function SongTable({ query = null, currentPlaylist, onSongAddedToPlaylist
           </div>
         )}
       </Card>
+      <Modal
+        title="Customize Columns"
+        open={isColumnModalOpen}
+        onCancel={() => setIsColumnModalOpen(false)}
+        footer={[
+          <Button key="reset" onClick={resetColumns}>
+            Reset to Default
+          </Button>,
+          <Button key="close" type="primary" onClick={() => setIsColumnModalOpen(false)}>
+            Done
+          </Button>,
+        ]}
+      >
+        <List
+          rowKey={(column) => column.id}
+          dataSource={modalColumns}
+          renderItem={(column, index) => {
+            const title = getColumnTitle(column)
+            const canHide = column.getCanHide()
+            return (
+              <List.Item
+                key={column.id}
+                actions={[
+                  <Button
+                    key="up"
+                    size="small"
+                    icon={<ArrowUp size={14} />}
+                    disabled={index === 0}
+                    onClick={() => moveColumn(column.id, -1)}
+                  />,
+                  <Button
+                    key="down"
+                    size="small"
+                    icon={<ArrowDown size={14} />}
+                    disabled={index === modalColumns.length - 1}
+                    onClick={() => moveColumn(column.id, 1)}
+                  />,
+                ]}
+              >
+                <Checkbox
+                  checked={column.getIsVisible()}
+                  onChange={(event) => handleColumnVisibilityToggle(column.id, event.target.checked)}
+                  disabled={!canHide}
+                >
+                  {title}
+                </Checkbox>
+              </List.Item>
+            )
+          }}
+        />
+      </Modal>
     </div>
   )
 }
