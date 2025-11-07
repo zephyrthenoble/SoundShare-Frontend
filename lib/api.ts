@@ -36,6 +36,12 @@ export interface Song {
   file_path?: string
 }
 
+export interface UpdateSongResponse {
+  song: Song
+  updated: string[]
+  message?: string
+}
+
 export interface Tag {
   id: number
   name: string
@@ -43,6 +49,8 @@ export interface Tag {
   group_id: number | null
   group_name: string | null
   created_at: string | null
+  sort_order: number | null
+  is_deleted: boolean
 }
 
 export interface TagGroup {
@@ -51,6 +59,38 @@ export interface TagGroup {
   description: string | null
   color: string | null
   created_at: string | null
+  is_default: boolean
+  is_deleted: boolean
+}
+
+export interface TagWithState extends Tag {
+  assigned?: boolean
+}
+
+export interface TagGroupWithTags extends TagGroup {
+  tags: TagWithState[]
+}
+
+export interface SongMetadataResponse {
+  song: Song
+  tag_groups: TagGroupWithTags[]
+  default_group_id: number
+  deleted_group_id: number
+}
+
+export interface CreateTagResult {
+  tag: Tag
+  restored: boolean
+  message?: string
+}
+
+export interface TagGroupsWithTagsResponse {
+  tag_groups: TagGroupWithTags[]
+}
+
+export interface DeleteTagGroupResponse {
+  message: string
+  default_group_id: number
 }
 
 export interface QueryBuilderField {
@@ -176,11 +216,35 @@ export const songsApi = {
     return response.json()
   },
 
+  // Update song metadata
+  updateSong: async (
+    songId: number,
+    payload: Partial<Pick<Song, 'display_name'>>,
+  ): Promise<UpdateSongResponse> => {
+    return apiRequest<UpdateSongResponse>(`/songs/${songId}`, {
+      method: 'PATCH',
+      body: JSON.stringify(payload),
+    })
+  },
+
+  // Fetch metadata and tag structure for a song
+  getSongMetadata: async (songId: number): Promise<SongMetadataResponse> => {
+    return apiRequest<SongMetadataResponse>(`/songs/${songId}/metadata`)
+  },
+
   // Add tag to song
-  addTagToSong: async (songId: number, tagName: string): Promise<{ message: string; tag: Tag }> => {
+  addTagToSong: async (
+    songId: number,
+    tagName: string,
+    options?: { groupId?: number; description?: string },
+  ): Promise<{ message: string; tag: Tag }> => {
     return apiRequest<{ message: string; tag: Tag }>(`/songs/${songId}/tags`, {
       method: 'POST',
-      body: JSON.stringify({ tag_name: tagName }),
+      body: JSON.stringify({
+        tag_name: tagName,
+        group_id: options?.groupId,
+        description: options?.description,
+      }),
     })
   },
 
@@ -199,20 +263,84 @@ export const tagsApi = {
   },
 
   // Create new tag
-  createTag: async (name: string, description?: string, groupId?: number): Promise<Tag> => {
-    return apiRequest<Tag>('/tags', {
+  createTag: async (
+    name: string,
+    description?: string,
+    groupId?: number,
+  ): Promise<CreateTagResult> => {
+    const response = await apiRequest<Tag | { message?: string; tag: Tag }>(
+      '/tags',
+      {
       method: 'POST',
       body: JSON.stringify({
         name,
         description,
         group_id: groupId,
       }),
-    })
+      },
+    )
+
+    if ('tag' in response) {
+      return { tag: response.tag, restored: true, message: response.message }
+    }
+
+    return { tag: response, restored: false }
   },
 
   // Get tag groups
   getTagGroups: async (): Promise<TagGroup[]> => {
     return apiRequest<TagGroup[]>('/tag-groups')
+  },
+
+  // Get tag groups with tags (optionally for a specific song)
+  getTagGroupsWithTags: async (songId?: number): Promise<TagGroupsWithTagsResponse> => {
+    const query = songId != null ? `?song_id=${songId}` : ''
+    return apiRequest<TagGroupsWithTagsResponse>(`/tag-groups/with-tags${query}`)
+  },
+
+  // Update a tag's metadata
+  updateTag: async (
+    tagId: number,
+    payload: Partial<{ name: string; description: string | null; group_id: number | null; sort_order: number }>,
+  ): Promise<Tag> => {
+    return apiRequest<Tag>(`/tags/${tagId}`, {
+      method: 'PATCH',
+      body: JSON.stringify(payload),
+    })
+  },
+
+  // Create a new tag group
+  createGroup: async (name: string, description?: string, color?: string): Promise<TagGroup> => {
+    return apiRequest<TagGroup>('/tag-groups', {
+      method: 'POST',
+      body: JSON.stringify({ name, description, color }),
+    })
+  },
+
+  // Update an existing tag group
+  updateGroup: async (
+    groupId: number,
+    payload: Partial<{ name: string; description: string | null; color: string | null }>,
+  ): Promise<TagGroup> => {
+    return apiRequest<TagGroup>(`/tag-groups/${groupId}`, {
+      method: 'PATCH',
+      body: JSON.stringify(payload),
+    })
+  },
+
+  // Delete a tag group (returns default group reassignment info)
+  deleteGroup: async (groupId: number): Promise<DeleteTagGroupResponse> => {
+    return apiRequest<DeleteTagGroupResponse>(`/tag-groups/${groupId}`, {
+      method: 'DELETE',
+    })
+  },
+
+  // Reorder tags within a group
+  reorderGroup: async (groupId: number, tagIds: number[]): Promise<{ message: string }> => {
+    return apiRequest<{ message: string }>(`/tag-groups/${groupId}/reorder`, {
+      method: 'POST',
+      body: JSON.stringify({ tag_ids: tagIds }),
+    })
   },
 }
 

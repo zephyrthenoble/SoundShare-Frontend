@@ -1,7 +1,15 @@
 'use client'
 
 import { useQuery, useQueryClient, useMutation } from '@tanstack/react-query'
-import { songsApi, tagsApi, type Song, type Tag } from '../api'
+import {
+  songsApi,
+  tagsApi,
+  type Song,
+  type Tag,
+  type SongMetadataResponse,
+  type UpdateSongResponse,
+  type TagGroupsWithTagsResponse,
+} from '../api'
 
 // Query keys for consistent caching
 export const QUERY_KEYS = {
@@ -11,10 +19,16 @@ export const QUERY_KEYS = {
     list: (filter?: string) => [...QUERY_KEYS.songs.lists(), { filter }] as const,
     details: () => [...QUERY_KEYS.songs.all, 'detail'] as const,
     detail: (id: number) => [...QUERY_KEYS.songs.details(), id] as const,
+    metadata: () => [...QUERY_KEYS.songs.all, 'metadata'] as const,
+    metadataDetail: (id: number) => [...QUERY_KEYS.songs.metadata(), id] as const,
   },
   tags: {
     all: ['tags'] as const,
     lists: () => [...QUERY_KEYS.tags.all, 'list'] as const,
+  },
+  tagGroups: {
+    all: ['tag-groups'] as const,
+    withTags: (songId?: number) => [...QUERY_KEYS.tagGroups.all, 'with-tags', songId ?? 'all'] as const,
   },
 } as const
 
@@ -55,6 +69,119 @@ export function useTags() {
     refetchOnWindowFocus: false,
     refetchOnReconnect: true,
   })
+}
+
+export function useTagGroupsWithTags(songId?: number) {
+  return useQuery<TagGroupsWithTagsResponse>({
+    queryKey: QUERY_KEYS.tagGroups.withTags(songId),
+    queryFn: () => tagsApi.getTagGroupsWithTags(songId),
+    staleTime: 10 * 60 * 1000,
+    gcTime: 30 * 60 * 1000,
+    refetchOnWindowFocus: false,
+  })
+}
+
+export function useTagGroupMutations() {
+  const queryClient = useQueryClient()
+
+  const invalidate = () => {
+    queryClient.invalidateQueries({ queryKey: QUERY_KEYS.tagGroups.all })
+    queryClient.invalidateQueries({ queryKey: QUERY_KEYS.tags.all })
+    queryClient.invalidateQueries({ queryKey: QUERY_KEYS.songs.metadata() })
+  }
+
+  const createGroup = useMutation({
+    mutationFn: ({
+      name,
+      description,
+      color,
+    }: {
+      name: string
+      description?: string
+      color?: string
+    }) => tagsApi.createGroup(name, description, color),
+    onSuccess: () => invalidate(),
+  })
+
+  const updateGroup = useMutation({
+    mutationFn: ({
+      groupId,
+      payload,
+    }: {
+      groupId: number
+      payload: Partial<{ name: string; description: string | null; color: string | null }>
+    }) => tagsApi.updateGroup(groupId, payload),
+    onSuccess: () => invalidate(),
+  })
+
+  const deleteGroup = useMutation({
+    mutationFn: (groupId: number) => tagsApi.deleteGroup(groupId),
+    onSuccess: () => invalidate(),
+  })
+
+  const reorderGroup = useMutation({
+    mutationFn: ({ groupId, tagIds }: { groupId: number; tagIds: number[] }) =>
+      tagsApi.reorderGroup(groupId, tagIds),
+    onSuccess: () => invalidate(),
+  })
+
+  return {
+    createGroup,
+    updateGroup,
+    deleteGroup,
+    reorderGroup,
+  }
+}
+
+export function useTagManagementMutations() {
+  const queryClient = useQueryClient()
+
+  const updateTag = useMutation({
+    mutationFn: ({
+      tagId,
+      payload,
+    }: {
+      tagId: number
+      payload: Partial<{ name: string; description: string | null; group_id: number | null; sort_order: number }>
+    }) => tagsApi.updateTag(tagId, payload),
+    onSuccess: (tag: Tag) => {
+      // Update existing song caches so display is immediately consistent
+      const allSongsQueries = queryClient.getQueriesData({
+        queryKey: QUERY_KEYS.songs.lists(),
+      })
+
+      allSongsQueries.forEach(([queryKey, songsData]) => {
+        if (Array.isArray(songsData)) {
+          const updatedSongs = (songsData as Song[]).map((song) => {
+            if (!song.tags.some((existing) => existing.id === tag.id)) {
+              return song
+            }
+
+            const updatedTags = tag.is_deleted
+              ? song.tags.filter(existing => existing.id !== tag.id)
+              : song.tags.map(existing =>
+                  existing.id === tag.id ? { ...existing, ...tag } : existing,
+                )
+
+            return {
+              ...song,
+              tags: updatedTags,
+            }
+          })
+
+          queryClient.setQueryData(queryKey, updatedSongs)
+        }
+      })
+
+      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.tagGroups.all })
+      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.tags.all })
+      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.songs.metadata() })
+    },
+  })
+
+  return {
+    updateTag,
+  }
 }
 
 // Custom hook for cache management
@@ -132,8 +259,15 @@ export function useTagMutations() {
   const queryClient = useQueryClient()
 
   const addTagToSong = useMutation({
-    mutationFn: ({ songId, tagName }: { songId: number; tagName: string }) =>
-      songsApi.addTagToSong(songId, tagName),
+    mutationFn: ({
+      songId,
+      tagName,
+      groupId,
+    }: {
+      songId: number
+      tagName: string
+      groupId?: number
+    }) => songsApi.addTagToSong(songId, tagName, { groupId }),
     onSuccess: (data: { message: string; tag: Tag }, variables) => {
       // Update the song in all relevant caches
       const allSongsQueries = queryClient.getQueriesData({
@@ -142,13 +276,24 @@ export function useTagMutations() {
 
       allSongsQueries.forEach(([queryKey, songsData]) => {
         if (Array.isArray(songsData)) {
-          const updatedSongs = (songsData as Song[]).map(song => 
-            song.id === variables.songId 
-              ? { ...song, tags: [...song.tags, data.tag] }
-              : song
-          )
+          const updatedSongs = (songsData as Song[]).map(song => {
+            if (song.id !== variables.songId) {
+              return song
+            }
+
+            const existingIndex = song.tags.findIndex((tag: Tag) => tag.id === data.tag.id)
+            const nextTags = existingIndex === -1
+              ? [...song.tags, data.tag]
+              : song.tags.map((tag: Tag, index) => (index === existingIndex ? data.tag : tag))
+
+            return { ...song, tags: nextTags }
+          })
           queryClient.setQueryData(queryKey, updatedSongs)
         }
+      })
+
+      queryClient.invalidateQueries({
+        queryKey: QUERY_KEYS.songs.metadataDetail(variables.songId),
       })
 
       // Also invalidate tags cache
@@ -176,6 +321,10 @@ export function useTagMutations() {
           )
           queryClient.setQueryData(queryKey, updatedSongs)
         }
+      })
+
+      queryClient.invalidateQueries({
+        queryKey: QUERY_KEYS.songs.metadataDetail(variables.songId),
       })
     },
   })
@@ -231,5 +380,55 @@ export function useOptimisticFiltering() {
       
       return null // Fall back to network request
     },
+  }
+}
+
+export function useSongMetadata(songId?: number) {
+  return useQuery<SongMetadataResponse>({
+    queryKey: QUERY_KEYS.songs.metadataDetail(songId ?? -1),
+    enabled: typeof songId === 'number',
+    queryFn: () => songsApi.getSongMetadata(songId!),
+    staleTime: 5 * 60 * 1000,
+    gcTime: 15 * 60 * 1000,
+  })
+}
+
+export function useSongMutations() {
+  const queryClient = useQueryClient()
+
+  const updateSong = useMutation({
+    mutationFn: ({
+      songId,
+      payload,
+    }: {
+      songId: number
+      payload: Partial<Pick<Song, 'display_name'>>
+    }) => songsApi.updateSong(songId, payload),
+    onSuccess: (response: UpdateSongResponse) => {
+      const updatedSong = response.song
+
+      const allSongsQueries = queryClient.getQueriesData({
+        queryKey: QUERY_KEYS.songs.lists(),
+      })
+
+      allSongsQueries.forEach(([queryKey, songsData]) => {
+        if (Array.isArray(songsData)) {
+          const updatedSongs = (songsData as Song[]).map(song =>
+            song.id === updatedSong.id ? { ...song, ...updatedSong } : song,
+          )
+          queryClient.setQueryData(queryKey, updatedSongs)
+        }
+      })
+
+      queryClient.setQueryData(
+        QUERY_KEYS.songs.metadataDetail(updatedSong.id),
+        (existing: SongMetadataResponse | undefined) =>
+          existing ? { ...existing, song: updatedSong } : existing,
+      )
+    },
+  })
+
+  return {
+    updateSong,
   }
 }

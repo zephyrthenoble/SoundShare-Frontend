@@ -1,10 +1,11 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, type KeyboardEvent } from 'react'
 import { Tag, Input, Button, Space, AutoComplete, App } from 'antd'
 import { Plus, X } from 'lucide-react'
 import { type Song, type Tag as TagType } from '@/lib/api'
 import { useTags, useTagMutations } from '@/lib/hooks/useCachedApi'
+import { getTagColor } from '@/lib/tagColors'
 
 interface EditableTagCellProps {
   song: Song
@@ -33,9 +34,9 @@ export function EditableTagCell({ song, onTagUpdate }: EditableTagCellProps) {
             setInputValue('')
             setIsEditing(false)
           },
-          onError: (error: any) => {
+          onError: (error: unknown) => {
             console.error('Failed to add tag:', error)
-            message.error('Failed to add tag')
+            message.error(error instanceof Error ? error.message : 'Failed to add tag')
           },
         }
       )
@@ -50,15 +51,15 @@ export function EditableTagCell({ song, onTagUpdate }: EditableTagCellProps) {
           onTagUpdate()
           message.success('Tag removed successfully')
         },
-        onError: (error: any) => {
+        onError: (error: unknown) => {
           console.error('Failed to remove tag:', error)
-          message.error('Failed to remove tag')
+          message.error(error instanceof Error ? error.message : 'Failed to remove tag')
         },
       }
     )
   }
 
-  const handleKeyPress = (e: React.KeyboardEvent) => {
+  const handleKeyPress = (e: KeyboardEvent) => {
     if (e.key === 'Enter') {
       handleAddTag()
     } else if (e.key === 'Escape') {
@@ -77,18 +78,23 @@ export function EditableTagCell({ song, onTagUpdate }: EditableTagCellProps) {
     }))
 
   return (
-    <div className="flex flex-wrap items-center gap-1 min-h-[32px]">
-      {song.tags.map((tag) => (
+    <div
+      className="flex flex-wrap items-center gap-1 min-h-[32px]"
+      onClick={(event) => event.stopPropagation()}
+    >
+      {song.tags
+        .filter(tag => !tag.is_deleted)
+        .map((tag) => (
         <Tag
           key={tag.id}
           closable
           onClose={() => handleRemoveTag(tag.id)}
           className="flex items-center"
-          color={getTagColor(tag.group_name)}
+            color={getTagColor(tag.name)}
         >
           {tag.name}
         </Tag>
-      ))}
+        ))}
 
       {isEditing ? (
         <div className="flex items-center space-x-1">
@@ -137,18 +143,3 @@ export function EditableTagCell({ song, onTagUpdate }: EditableTagCellProps) {
   )
 }
 
-// Helper function to get consistent colors for tag groups
-function getTagColor(groupName: string | null): string {
-  if (!groupName) return 'default'
-
-  const colorMap: Record<string, string> = {
-    'Speed': 'blue',
-    'Mood': 'green',
-    'Location': 'orange',
-    'Genre': 'purple',
-    'Energy': 'red',
-    'Instrument': 'cyan',
-  }
-
-  return colorMap[groupName] || 'default'
-}

@@ -18,9 +18,10 @@ import {
 import { Button, Input, Space, Card, Typography, Spin, Alert, Select, Modal, Checkbox, List, Tooltip } from 'antd'
 import { PlayCircle, Music, Clock, Calendar, User, Disc, FolderOpen, ChevronLeft, ChevronRight, Plus, RefreshCw, SlidersHorizontal, ArrowUp, ArrowDown, Gauge, ActivitySquare, Hash } from 'lucide-react'
 import { type Song } from '@/lib/api'
-import { useSongs, useSongsCacheManager, useOptimisticFiltering, useTagMutations } from '@/lib/hooks/useCachedApi'
+import { useSongs, useSongsCacheManager, useOptimisticFiltering } from '@/lib/hooks/useCachedApi'
 import type { QueryJSON } from '@/lib/queryBuilderUtils'
 import { EditableTagCell } from './EditableTagCell'
+import { SongMetadataModal } from './SongMetadataModal'
 import { useMusicPlayer } from '@/lib/music-context'
 import type { Playlist } from '@/lib/playlist-types'
 import { message } from 'antd'
@@ -76,6 +77,8 @@ export function SongTable({ query = null, currentPlaylist, onSongAddedToPlaylist
   const [columnOrder, setColumnOrder] = useState<string[]>([])
   const [hasCustomOrdering, setHasCustomOrdering] = useState(false)
   const [isColumnModalOpen, setIsColumnModalOpen] = useState(false)
+  const [metadataSongId, setMetadataSongId] = useState<number | null>(null)
+  const [isMetadataModalOpen, setIsMetadataModalOpen] = useState(false)
   const { playSong } = useMusicPlayer()
 
   const addSongToPlaylist = (song: Song) => {
@@ -472,7 +475,8 @@ export function SongTable({ query = null, currentPlaylist, onSongAddedToPlaylist
           <Button
             type="text"
             icon={<PlayCircle size={20} />}
-            onClick={() => {
+            onClick={(event) => {
+              event.stopPropagation()
               playSong(row.original)
             }}
             className="text-blue-500 hover:text-blue-700"
@@ -482,7 +486,10 @@ export function SongTable({ query = null, currentPlaylist, onSongAddedToPlaylist
             <Button
               type="text"
               icon={<Plus size={16} />}
-              onClick={() => addSongToPlaylist(row.original)}
+              onClick={(event) => {
+                event.stopPropagation()
+                addSongToPlaylist(row.original)
+              }}
               className="text-green-500 hover:text-green-700"
               title={`Add ${row.original.display_name} to playlist`}
             />
@@ -700,7 +707,11 @@ export function SongTable({ query = null, currentPlaylist, onSongAddedToPlaylist
                       {table.getRowModel().rows.map((row) => (
                         <tr
                           key={row.id}
-                          className="border-b border-gray-100 hover:bg-gray-50 transition-colors"
+                          className="border-b border-gray-100 hover:bg-gray-50 transition-colors cursor-pointer"
+                          onClick={() => {
+                            setMetadataSongId(row.original.id)
+                            setIsMetadataModalOpen(true)
+                          }}
                         >
                           {row.getVisibleCells().map((cell) => (
                             <td
@@ -827,6 +838,15 @@ export function SongTable({ query = null, currentPlaylist, onSongAddedToPlaylist
           }}
         />
       </Modal>
+      <SongMetadataModal
+        songId={metadataSongId}
+        open={isMetadataModalOpen && metadataSongId !== null}
+        onClose={() => {
+          setIsMetadataModalOpen(false)
+          setMetadataSongId(null)
+          refetch()
+        }}
+      />
     </div>
   )
 }
