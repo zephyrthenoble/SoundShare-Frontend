@@ -5,12 +5,46 @@ import { queryBuilderApi } from '@/lib/api'
 /**
  * Converts backend QueryBuilderField to react-querybuilder Field format
  */
+const operatorLabelMap: Record<string, string> = {
+  '=': 'equals',
+  '==': 'equals',
+  '!=': 'does not equal',
+  '<>': 'does not equal',
+  contains: 'contains',
+  doesNotContain: 'does not contain',
+  not_contains: 'does not contain',
+  notIn: 'not in',
+  not_in: 'not in',
+  beginsWith: 'begins with',
+  endsWith: 'ends with',
+  '>': 'greater than',
+  '<': 'less than',
+  '>=': 'greater than or equal',
+  '<=': 'less than or equal',
+  between: 'between',
+  notBetween: 'not between',
+  in: 'in',
+  null: 'is null',
+  notNull: 'is not null',
+}
+
 function convertBackendFieldToReactQueryBuilder(backendField: QueryBuilderField): Field {
   const field: Field = {
     name: backendField.name,
     label: backendField.label,
     inputType: backendField.inputType,
-    operators: backendField.operators,
+    operators: (backendField.operators as Array<{ name: string; label?: string } | string>).map((operator) => {
+      if (typeof operator === 'string') {
+        return {
+          name: operator,
+          label: operatorLabelMap[operator] ?? operator.replace(/([a-z])([A-Z])/g, '$1 $2').replace(/_/g, ' ').toLowerCase(),
+        }
+      }
+      return {
+        name: operator.name,
+        label: operator.label ?? operatorLabelMap[operator.name] ?? operator.name,
+      }
+    }),
   }
 
   // Add values for select fields

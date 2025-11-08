@@ -97,10 +97,13 @@ export interface QueryBuilderField {
   name: string
   label: string
   inputType: 'text' | 'number' | 'select' | 'checkbox'
-  operators: Array<{
-    name: string
-    label: string
-  }>
+  operators: Array<
+    | {
+        name: string
+        label?: string
+      }
+    | string
+  >
   values?: Array<{
     name: string
     label: string

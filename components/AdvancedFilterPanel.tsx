@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useState, useEffect, useRef, useCallback } from 'react'
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import {
   Card,
@@ -24,11 +24,11 @@ import { fetchQueryBuilderFields, defaultQueryBuilderConfig } from '@/lib/queryB
 import { convertQueryToJSON, QueryJSON, generateRuleId } from '@/lib/queryBuilderUtils'
 
 import { QueryBuilderDnD } from '@react-querybuilder/dnd'
-import { QueryBuilderAntD } from '@react-querybuilder/antd'
+import { QueryBuilderAntD, antdControlElements } from '@react-querybuilder/antd'
 import * as ReactDnD from 'react-dnd'
 import * as ReactDndHtml5Backend from 'react-dnd-html5-backend'
 import * as ReactDndTouchBackend from 'react-dnd-touch-backend'
-import { QueryBuilder, RuleGroupType, Field, formatQuery } from 'react-querybuilder'
+import { QueryBuilder, RuleGroupType, Field, formatQuery, type ValueEditorProps, type RuleType } from 'react-querybuilder'
 
 
 const { Title } = Typography
@@ -89,6 +89,116 @@ export const AdvancedFilterPanel = React.memo(function AdvancedFilterPanel({ fil
     retry: 2,
   })
 
+  const tagSelectOptions = useMemo(
+    () => allTags.map((tag) => ({ label: tag.name, value: tag.name })),
+    [allTags],
+  )
+
+  const tagFieldValues = useMemo(
+    () => tagSelectOptions.map((option) => ({ name: option.value, label: option.label })),
+    [tagSelectOptions],
+  )
+
+  const enhancedFields = useMemo(() => {
+    const transformed = fields.map((field) => {
+      if (field.name !== 'tags') {
+        return field
+      }
+      return {
+        ...field,
+        operators: [
+          { name: 'in', label: 'contains' },
+          { name: 'notIn', label: 'does not contain' },
+        ],
+        values: tagFieldValues,
+      }
+    })
+
+    transformed.sort((a, b) => {
+      if (a.name === 'tags') return -1
+      if (b.name === 'tags') return 1
+      return 0
+    })
+
+    return transformed
+  }, [fields, tagFieldValues])
+
+  const tagControlElements = useMemo(() => {
+    const defaultValueEditor = antdControlElements.valueEditor
+
+    const TagValueEditor: React.FC<ValueEditorProps> = (props) => {
+      if (props.field === 'tags') {
+        const selectedValues = Array.isArray(props.value)
+          ? props.value
+          : props.value
+            ? [props.value]
+            : []
+
+        return (
+          <Select
+            mode="multiple"
+            showSearch
+            allowClear
+            placeholder="Select tags"
+            options={tagSelectOptions}
+            optionFilterProp="label"
+            value={selectedValues}
+            disabled={props.disabled}
+            onChange={(next) => props.handleOnChange(next)}
+            style={{ minWidth: 200 }}
+          />
+        )
+      }
+
+      if (defaultValueEditor) {
+        const DefaultValueEditor = defaultValueEditor
+        return <DefaultValueEditor {...props} />
+      }
+
+      return (
+        <Input
+          disabled={props.disabled}
+          value={(props.value ?? '') as string}
+          onChange={(event) => props.handleOnChange(event.target.value)}
+        />
+      )
+    }
+
+    return {
+      ...antdControlElements,
+      valueEditor: TagValueEditor,
+    }
+  }, [tagSelectOptions])
+
+  function normalizeTagsRuleGroup(group: RuleGroupType): RuleGroupType {
+    return {
+      ...group,
+      rules: group.rules.map((item) => {
+        if ('rules' in item) {
+          return normalizeTagsRuleGroup(item as RuleGroupType)
+        }
+
+        const rule = { ...(item as RuleType) }
+
+        if (!rule.field) {
+          rule.field = 'tags'
+        }
+
+        if (rule.field === 'tags') {
+          if (!rule.operator || (rule.operator !== 'in' && rule.operator !== 'notIn')) {
+            rule.operator = 'in'
+          }
+
+          if (!Array.isArray(rule.value)) {
+            rule.value = rule.value ? [rule.value] : []
+          }
+        }
+
+        return rule
+      }),
+    }
+  }
+
   useEffect(() => {
     console.log('🔄 useEffect triggered - filters prop changed:', { 
       filters,
@@ -115,7 +225,7 @@ export const AdvancedFilterPanel = React.memo(function AdvancedFilterPanel({ fil
           ]
         }
         console.log('🔄 Converted QueryJSON to RuleGroupType:', convertedQuery)
-        setQuery(convertedQuery)
+        setQuery(normalizeTagsRuleGroup(convertedQuery))
       } else if (typeof filters === 'string') {
         // SQL query - for now, we can't convert back to QueryBuilder format
         // so we'll start with empty query (user will need to rebuild)
@@ -141,10 +251,10 @@ export const AdvancedFilterPanel = React.memo(function AdvancedFilterPanel({ fil
   // Query Builder Configuration
   // Debug fields configuration
   console.log('🔧 Query Builder Fields Configuration:', {
-    fieldsCount: fields.length,
+    fieldsCount: enhancedFields.length,
     fieldsLoading,
     fieldsError,
-    fields: fields.map((f: any) => ({ name: f.name, label: f.label, inputType: f.inputType })),
+    fields: enhancedFields.map((f: any) => ({ name: f.name, label: f.label, inputType: f.inputType })),
     tagsCount: allTags.length,
     allTags: allTags.map(t => t.name)
   })
@@ -169,7 +279,7 @@ export const AdvancedFilterPanel = React.memo(function AdvancedFilterPanel({ fil
         ]
       }
       console.log('🚀 Initial Query Builder State from filters:', initialQuery)
-      return initialQuery
+      return normalizeTagsRuleGroup(initialQuery)
     }
     
     // Otherwise use default
@@ -182,20 +292,22 @@ export const AdvancedFilterPanel = React.memo(function AdvancedFilterPanel({ fil
   })
 
   // Handle query builder changes
-  const handleQueryChange = (newQuery: RuleGroupType) => {
+  const handleQueryChange = (incomingQuery: RuleGroupType) => {
     console.log('🔍 Query Builder Change Detected:', {
       timestamp: new Date().toISOString(),
       oldQuery: query,
-      newQuery: newQuery,
-      hasRules: newQuery.rules?.length > 0,
-      ruleCount: newQuery.rules?.length || 0,
-      combinator: newQuery.combinator,
-      not: newQuery.not
+      newQuery: incomingQuery,
+      hasRules: incomingQuery.rules?.length > 0,
+      ruleCount: incomingQuery.rules?.length || 0,
+      combinator: incomingQuery.combinator,
+      not: incomingQuery.not
     })
     
+    const normalizedQuery = normalizeTagsRuleGroup(incomingQuery)
+
     // Update query state immediately to preserve query builder's internal state
-    console.log('🔍 Setting query state to:', newQuery)
-    setQuery(newQuery)
+    console.log('🔍 Setting query state to:', normalizedQuery)
+    setQuery(normalizedQuery)
     
   }
 
@@ -215,30 +327,33 @@ export const AdvancedFilterPanel = React.memo(function AdvancedFilterPanel({ fil
         </div>
       ) : (
         <QueryBuilderDnD dnd={{ ...ReactDnD, ...ReactDndHtml5Backend, ...ReactDndTouchBackend }}>
-          <QueryBuilder
-            key="stable-query-builder"
-            fields={fields}
-            query={query}
-            onQueryChange={handleQueryChange}
-            controlClassnames={{
-              queryBuilder: 'queryBuilder-branches',
-              ruleGroup: 'ruleGroup',
-              header: 'ruleGroup-header',
-              body: 'ruleGroup-body',
-              combinators: 'ruleGroup-combinators',
-              addRule: 'ruleGroup-addRule',
-              addGroup: 'ruleGroup-addGroup',
-              cloneGroup: 'ruleGroup-cloneGroup',
-              removeGroup: 'ruleGroup-remove',
-              rule: 'rule',
-              fields: 'rule-fields',
-              operators: 'rule-operators',
-              value: 'rule-value',
-              removeRule: 'rule-remove',
-            }}
-            {...defaultQueryBuilderConfig}
-            debugMode={true}
-          />
+          <QueryBuilderAntD controlElements={tagControlElements}>
+            <QueryBuilder
+              key="stable-query-builder"
+              fields={enhancedFields}
+              query={query}
+              onQueryChange={handleQueryChange}
+              controlClassnames={{
+                queryBuilder: 'queryBuilder-branches',
+                ruleGroup: 'ruleGroup',
+                header: 'ruleGroup-header',
+                body: 'ruleGroup-body',
+                combinators: 'ruleGroup-combinators',
+                addRule: 'ruleGroup-addRule',
+                addGroup: 'ruleGroup-addGroup',
+                cloneGroup: 'ruleGroup-cloneGroup',
+                removeGroup: 'ruleGroup-remove',
+                rule: 'rule',
+                fields: 'rule-fields',
+                operators: 'rule-operators',
+                value: 'rule-value',
+                removeRule: 'rule-remove',
+              }}
+              controlElements={tagControlElements}
+              {...defaultQueryBuilderConfig}
+              debugMode={true}
+            />
+          </QueryBuilderAntD>
         </QueryBuilderDnD>
       )}
     </div>
