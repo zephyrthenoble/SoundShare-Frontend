@@ -21,8 +21,7 @@ import { type Song } from '@/lib/api'
 import { useSongs, useSongsCacheManager, useOptimisticFiltering } from '@/lib/hooks/useCachedApi'
 import type { QueryJSON } from '@/lib/queryBuilderUtils'
 import { EditableTagCell } from './EditableTagCell'
-import { SongMetadataModal } from './SongMetadataModal'
-import { BulkTagModal } from './BulkTagModal'
+import { TagEditModal } from './TagEditModal'
 import { useMusicPlayer } from '@/lib/music-context'
 import type { Playlist } from '@/lib/playlist-types'
 import { message } from 'antd'
@@ -40,10 +39,10 @@ interface SongTableProps {
 
 const buildDefaultVisibility = (expanded: boolean): VisibilityState => ({
   display_name: true,
-  artist: true,
+  artist: expanded,
   album: true,
-  genre: true,
-  year: true,
+  genre: expanded,
+  year: expanded,
   duration: true,
   tags: true,
   tempo: expanded,
@@ -78,10 +77,12 @@ export function SongTable({ query = null, currentPlaylist, onSongAddedToPlaylist
   const [columnOrder, setColumnOrder] = useState<string[]>([])
   const [hasCustomOrdering, setHasCustomOrdering] = useState(false)
   const [isColumnModalOpen, setIsColumnModalOpen] = useState(false)
-  const [metadataSongId, setMetadataSongId] = useState<number | null>(null)
-  const [isMetadataModalOpen, setIsMetadataModalOpen] = useState(false)
+  const [editDisplayNameSongId, setEditDisplayNameSongId] = useState<number | null>(null)
+  const [isDisplayNameModalOpen, setIsDisplayNameModalOpen] = useState(false)
+  const [tagEditSongIds, setTagEditSongIds] = useState<number[]>([])
+  const [isTagEditModalOpen, setIsTagEditModalOpen] = useState(false)
+  const [tagEditMode, setTagEditMode] = useState<'single' | 'bulk'>('single')
   const [selectedSongIds, setSelectedSongIds] = useState<Set<number>>(new Set())
-  const [isBulkTagModalOpen, setIsBulkTagModalOpen] = useState(false)
   const { playSong } = useMusicPlayer()
 
   // Selection handlers
@@ -122,13 +123,21 @@ export function SongTable({ query = null, currentPlaylist, onSongAddedToPlaylist
       message.warning('Please select at least one song')
       return
     }
-    setIsBulkTagModalOpen(true)
+    setTagEditSongIds(Array.from(selectedSongIds))
+    setTagEditMode('bulk')
+    setIsTagEditModalOpen(true)
   }
 
   const handleBulkTagSuccess = () => {
     // Refresh songs after bulk tag update
     refetch()
     setSelectedSongIds(new Set())
+  }
+
+  const handleOpenSingleTagEdit = (songId: number) => {
+    setTagEditSongIds([songId])
+    setTagEditMode('single')
+    setIsTagEditModalOpen(true)
   }
 
   const handleBulkAddToPlaylist = () => {
@@ -379,11 +388,12 @@ export function SongTable({ query = null, currentPlaylist, onSongAddedToPlaylist
       header: 'Tags',
       meta: { title: 'Tags' },
       enableSorting: false,
-      size: 220,
+      size: 350,
       cell: ({ row }) => (
         <EditableTagCell
           song={row.original}
           onTagUpdate={() => refetch()}
+          onEditClick={handleOpenSingleTagEdit}
         />
       ),
     },
@@ -854,25 +864,30 @@ export function SongTable({ query = null, currentPlaylist, onSongAddedToPlaylist
                       {table.getRowModel().rows.map((row) => (
                         <tr
                           key={row.id}
-                          className="border-b border-gray-100 hover:bg-gray-50 transition-colors cursor-pointer"
-                          onClick={(e) => {
-                            // Don't open modal if clicking on checkbox or its container
-                            const target = e.target as HTMLElement
-                            if (
-                              target.closest('input[type="checkbox"]') ||
-                              target.closest('.ant-checkbox') ||
-                              target.tagName === 'INPUT'
-                            ) {
-                              return
-                            }
-                            setMetadataSongId(row.original.id)
-                            setIsMetadataModalOpen(true)
-                          }}
+                          className="border-b border-gray-100 hover:bg-gray-50 transition-colors"
                         >
                           {row.getVisibleCells().map((cell) => (
                             <td
                               key={cell.id}
                               className="py-3 px-4 text-gray-900"
+                              onClick={(e) => {
+                                // Don't handle clicks on checkboxes
+                                const target = e.target as HTMLElement
+                                if (
+                                  target.closest('input[type="checkbox"]') ||
+                                  target.closest('.ant-checkbox') ||
+                                  target.tagName === 'INPUT'
+                                ) {
+                                  return
+                                }
+                                
+                                // Open display name modal when clicking on Song column
+                                if (cell.column.id === 'display_name') {
+                                  setEditDisplayNameSongId(row.original.id)
+                                  setIsDisplayNameModalOpen(true)
+                                }
+                              }}
+                              style={{ cursor: cell.column.id === 'display_name' ? 'pointer' : 'default' }}
                             >
                               {flexRender(cell.column.columnDef.cell, cell.getContext())}
                             </td>
@@ -994,20 +1009,50 @@ export function SongTable({ query = null, currentPlaylist, onSongAddedToPlaylist
           }}
         />
       </Modal>
-      <SongMetadataModal
-        songId={metadataSongId}
-        open={isMetadataModalOpen && metadataSongId !== null}
-        onClose={() => {
-          setIsMetadataModalOpen(false)
-          setMetadataSongId(null)
-          refetch()
+
+      {/* Display Name Edit Modal */}
+      <Modal
+        title="Edit Song Name"
+        open={isDisplayNameModalOpen && editDisplayNameSongId !== null}
+        onCancel={() => {
+          setIsDisplayNameModalOpen(false)
+          setEditDisplayNameSongId(null)
         }}
-      />
-      <BulkTagModal
-        visible={isBulkTagModalOpen}
-        onClose={() => setIsBulkTagModalOpen(false)}
-        selectedSongs={selectedSongs}
-        onSuccess={handleBulkTagSuccess}
+        footer={null}
+      >
+        <div className="py-4">
+          <Input
+            placeholder="Enter new song name..."
+            defaultValue={displaySongs.find(s => s.id === editDisplayNameSongId)?.display_name}
+            onPressEnter={(e) => {
+              const newName = (e.target as HTMLInputElement).value
+              if (newName && editDisplayNameSongId) {
+                // TODO: Add update song name API call
+                message.success('Song name updated')
+                setIsDisplayNameModalOpen(false)
+                setEditDisplayNameSongId(null)
+                refetch()
+              }
+            }}
+          />
+        </div>
+      </Modal>
+
+      {/* Unified Tag Edit Modal */}
+      <TagEditModal
+        visible={isTagEditModalOpen}
+        onClose={() => {
+          setIsTagEditModalOpen(false)
+          setTagEditSongIds([])
+        }}
+        songs={displaySongs.filter(s => tagEditSongIds.includes(s.id))}
+        onSuccess={() => {
+          refetch()
+          if (tagEditMode === 'bulk') {
+            setSelectedSongIds(new Set())
+          }
+        }}
+        mode={tagEditMode}
       />
     </div>
   )

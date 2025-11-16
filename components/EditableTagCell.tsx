@@ -2,7 +2,7 @@
 
 import { useState, type KeyboardEvent } from 'react'
 import { Tag, Input, Button, Space, AutoComplete, App } from 'antd'
-import { Plus, X } from 'lucide-react'
+import { Pencil, X } from 'lucide-react'
 import { type Song, type Tag as TagType } from '@/lib/api'
 import { useTags, useTagMutations } from '@/lib/hooks/useCachedApi'
 import { getTagColor } from '@/lib/tagColors'
@@ -10,9 +10,10 @@ import { getTagColor } from '@/lib/tagColors'
 interface EditableTagCellProps {
   song: Song
   onTagUpdate: () => void
+  onEditClick?: (songId: number) => void
 }
 
-export function EditableTagCell({ song, onTagUpdate }: EditableTagCellProps) {
+export function EditableTagCell({ song, onTagUpdate, onEditClick }: EditableTagCellProps) {
   const [isEditing, setIsEditing] = useState(false)
   const [inputValue, setInputValue] = useState('')
   const { message } = App.useApp()
@@ -96,47 +97,15 @@ export function EditableTagCell({ song, onTagUpdate }: EditableTagCellProps) {
         </Tag>
         ))}
 
-      {isEditing ? (
-        <div className="flex items-center space-x-1">
-          <AutoComplete
-            size="small"
-            style={{ width: 120 }}
-            value={inputValue}
-            onChange={setInputValue}
-            onKeyDown={handleKeyPress}
-            placeholder="Add tag..."
-            options={tagSuggestions}
-            filterOption={(inputValue, option) =>
-              option?.label?.toLowerCase().includes(inputValue.toLowerCase()) ?? false
-            }
-            autoFocus
-          />
-          <Button
-            type="primary"
-            size="small"
-            icon={<Plus size={12} />}
-            onClick={handleAddTag}
-            loading={addTagToSong.isPending}
-            disabled={!inputValue.trim()}
-          />
-          <Button
-            size="small"
-            icon={<X size={12} />}
-            onClick={() => {
-              setInputValue('')
-              setIsEditing(false)
-            }}
-          />
-        </div>
-      ) : (
+      {onEditClick && (
         <Button
-          type="dashed"
+          type="default"
           size="small"
-          icon={<Plus size={12} />}
-          onClick={() => setIsEditing(true)}
+          icon={<Pencil size={12} />}
+          onClick={() => onEditClick(song.id)}
           className="text-xs"
         >
-          Add
+          Edit
         </Button>
       )}
     </div>
