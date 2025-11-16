@@ -126,12 +126,9 @@ export function LibraryColumn({
 
   return (
     <div className="h-full">
-      <Card className="h-full">
-        <Title level={4}>Library</Title>
-
-        <Space direction="vertical" size="large" className="w-full">
-          {/* Advanced Filters Section - Always Available */}
-          <Collapse
+      <Space direction="vertical" size="large" className="w-full">
+        {/* Advanced Filters Section - Always Available */}
+        <Collapse
             activeKey={activeKeys}
             onChange={(keys) => setActiveKeys(keys as string[])}
             ghost
@@ -223,7 +220,6 @@ export function LibraryColumn({
             />
           )}
         </Space>
-      </Card>
     </div>
   )
 }

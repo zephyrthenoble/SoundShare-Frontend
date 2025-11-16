@@ -22,6 +22,7 @@ import { useSongs, useSongsCacheManager, useOptimisticFiltering } from '@/lib/ho
 import type { QueryJSON } from '@/lib/queryBuilderUtils'
 import { EditableTagCell } from './EditableTagCell'
 import { SongMetadataModal } from './SongMetadataModal'
+import { BulkTagModal } from './BulkTagModal'
 import { useMusicPlayer } from '@/lib/music-context'
 import type { Playlist } from '@/lib/playlist-types'
 import { message } from 'antd'
@@ -79,7 +80,84 @@ export function SongTable({ query = null, currentPlaylist, onSongAddedToPlaylist
   const [isColumnModalOpen, setIsColumnModalOpen] = useState(false)
   const [metadataSongId, setMetadataSongId] = useState<number | null>(null)
   const [isMetadataModalOpen, setIsMetadataModalOpen] = useState(false)
+  const [selectedSongIds, setSelectedSongIds] = useState<Set<number>>(new Set())
+  const [isBulkTagModalOpen, setIsBulkTagModalOpen] = useState(false)
   const { playSong } = useMusicPlayer()
+
+  // Selection handlers
+  const handleToggleSong = (songId: number) => {
+    setSelectedSongIds((prev) => {
+      const newSet = new Set(prev)
+      if (newSet.has(songId)) {
+        newSet.delete(songId)
+      } else {
+        newSet.add(songId)
+      }
+      return newSet
+    })
+  }
+
+  const handleSelectAll = (visibleSongs: Song[]) => {
+    const visibleSongIds = new Set(visibleSongs.map((s) => s.id))
+    setSelectedSongIds(visibleSongIds)
+  }
+
+  const handleDeselectAll = () => {
+    setSelectedSongIds(new Set())
+  }
+
+  const handleToggleSelectAll = (visibleSongs: Song[]) => {
+    const visibleSongIds = visibleSongs.map((s) => s.id)
+    const allVisibleSelected = visibleSongIds.length > 0 && visibleSongIds.every(id => selectedSongIds.has(id))
+    
+    if (allVisibleSelected) {
+      handleDeselectAll()
+    } else {
+      handleSelectAll(visibleSongs)
+    }
+  }
+
+  const handleOpenBulkTagModal = () => {
+    if (selectedSongIds.size === 0) {
+      message.warning('Please select at least one song')
+      return
+    }
+    setIsBulkTagModalOpen(true)
+  }
+
+  const handleBulkTagSuccess = () => {
+    // Refresh songs after bulk tag update
+    refetch()
+    setSelectedSongIds(new Set())
+  }
+
+  const handleBulkAddToPlaylist = () => {
+    if (!currentPlaylist) {
+      message.error('No playlist selected')
+      return
+    }
+
+    if (selectedSongIds.size === 0) {
+      message.warning('Please select at least one song')
+      return
+    }
+
+    // Get the selected songs
+    const songsToAdd = selectedSongs.filter(
+      (song) => !currentPlaylist.manual_songs.some((s) => s.id === song.id)
+    )
+
+    if (songsToAdd.length === 0) {
+      message.info('All selected songs are already in the playlist')
+      return
+    }
+
+    // Add songs to playlist
+    currentPlaylist.manual_songs.push(...songsToAdd)
+    message.success(`Added ${songsToAdd.length} song${songsToAdd.length > 1 ? 's' : ''} to playlist`)
+    onSongAddedToPlaylist?.()
+    setSelectedSongIds(new Set())
+  }
 
   const addSongToPlaylist = (song: Song) => {
     if (!currentPlaylist) {
@@ -138,6 +216,11 @@ export function SongTable({ query = null, currentPlaylist, onSongAddedToPlaylist
   
   // Use optimistic results if available and still loading
   const displaySongs = optimisticSongs && isLoading ? optimisticSongs : songs
+  
+  // Selected songs based on current filter
+  const selectedSongs = useMemo(() => {
+    return displaySongs.filter((song) => selectedSongIds.has(song.id))
+  }, [displaySongs, selectedSongIds])
   
   console.log('📊 Songs fetched:', { 
     count: displaySongs.length, 
@@ -237,6 +320,35 @@ export function SongTable({ query = null, currentPlaylist, onSongAddedToPlaylist
 
   const columns = useMemo<ColumnDef<Song>[]>(() => [
     {
+      id: 'select',
+      header: ({ table }) => {
+        const visibleRows = table.getRowModel().rows
+        const visibleSongs = visibleRows.map(row => row.original)
+        const visibleSongIds = visibleSongs.map(s => s.id)
+        const allVisibleSelected = visibleSongIds.length > 0 && visibleSongIds.every(id => selectedSongIds.has(id))
+        const someVisibleSelected = visibleSongIds.some(id => selectedSongIds.has(id)) && !allVisibleSelected
+        
+        return (
+          <Checkbox
+            checked={allVisibleSelected}
+            indeterminate={someVisibleSelected}
+            onChange={() => handleToggleSelectAll(visibleSongs)}
+            style={{ transform: 'scale(1.3)' }}
+          />
+        )
+      },
+      cell: ({ row }) => (
+        <Checkbox
+          checked={selectedSongIds.has(row.original.id)}
+          onChange={() => handleToggleSong(row.original.id)}
+          style={{ transform: 'scale(1.3)' }}
+        />
+      ),
+      size: 40,
+      enableSorting: false,
+      enableHiding: false,
+    },
+    {
       id: 'display_name',
       accessorKey: 'display_name',
       header: 'Song',
@@ -261,6 +373,19 @@ export function SongTable({ query = null, currentPlaylist, onSongAddedToPlaylist
           </div>
         )
       },
+    },
+    {
+      id: 'tags',
+      header: 'Tags',
+      meta: { title: 'Tags' },
+      enableSorting: false,
+      size: 220,
+      cell: ({ row }) => (
+        <EditableTagCell
+          song={row.original}
+          onTagUpdate={() => refetch()}
+        />
+      ),
     },
     {
       id: 'artist',
@@ -323,19 +448,6 @@ export function SongTable({ query = null, currentPlaylist, onSongAddedToPlaylist
         </div>
       ),
       size: 100,
-    },
-    {
-      id: 'tags',
-      header: 'Tags',
-      meta: { title: 'Tags' },
-      enableSorting: false,
-      size: 220,
-      cell: ({ row }) => (
-        <EditableTagCell
-          song={row.original}
-          onTagUpdate={() => refetch()}
-        />
-      ),
     },
     {
       id: 'tempo',
@@ -498,7 +610,7 @@ export function SongTable({ query = null, currentPlaylist, onSongAddedToPlaylist
       ),
       size: currentPlaylist ? 140 : 80,
     },
-  ], [currentPlaylist, playSong, refetch])
+  ], [currentPlaylist, playSong, refetch, selectedSongIds, handleToggleSong, handleToggleSelectAll])
 
   const columnIds = useMemo(() => (
     columns
@@ -644,6 +756,41 @@ export function SongTable({ query = null, currentPlaylist, onSongAddedToPlaylist
               />
             </Tooltip>
             <Button
+              onClick={() => {
+                const visibleRows = table.getRowModel().rows
+                const visibleSongs = visibleRows.map(row => row.original)
+                const visibleSongIds = visibleSongs.map(s => s.id)
+                const allVisibleSelected = visibleSongIds.length > 0 && visibleSongIds.every(id => selectedSongIds.has(id))
+                
+                if (allVisibleSelected) {
+                  handleDeselectAll()
+                } else {
+                  handleSelectAll(visibleSongs)
+                }
+              }}
+            >
+              {(() => {
+                const visibleRows = table.getRowModel().rows
+                const visibleSongs = visibleRows.map(row => row.original)
+                const visibleSongIds = visibleSongs.map(s => s.id)
+                const allVisibleSelected = visibleSongIds.length > 0 && visibleSongIds.every(id => selectedSongIds.has(id))
+                return allVisibleSelected ? 'Deselect All' : 'Select All'
+              })()}
+            </Button>
+            <Button
+              type="primary"
+              onClick={handleOpenBulkTagModal}
+              disabled={selectedSongIds.size === 0}
+            >
+              Bulk Tag ({selectedSongIds.size})
+            </Button>
+            <Button
+              onClick={handleBulkAddToPlaylist}
+              disabled={!currentPlaylist || selectedSongIds.size === 0}
+            >
+              Bulk Add ({selectedSongIds.size})
+            </Button>
+            <Button
               icon={<RefreshCw size={16} />}
               onClick={() => refetch()}
               loading={isFetching}
@@ -708,7 +855,16 @@ export function SongTable({ query = null, currentPlaylist, onSongAddedToPlaylist
                         <tr
                           key={row.id}
                           className="border-b border-gray-100 hover:bg-gray-50 transition-colors cursor-pointer"
-                          onClick={() => {
+                          onClick={(e) => {
+                            // Don't open modal if clicking on checkbox or its container
+                            const target = e.target as HTMLElement
+                            if (
+                              target.closest('input[type="checkbox"]') ||
+                              target.closest('.ant-checkbox') ||
+                              target.tagName === 'INPUT'
+                            ) {
+                              return
+                            }
                             setMetadataSongId(row.original.id)
                             setIsMetadataModalOpen(true)
                           }}
@@ -846,6 +1002,12 @@ export function SongTable({ query = null, currentPlaylist, onSongAddedToPlaylist
           setMetadataSongId(null)
           refetch()
         }}
+      />
+      <BulkTagModal
+        visible={isBulkTagModalOpen}
+        onClose={() => setIsBulkTagModalOpen(false)}
+        selectedSongs={selectedSongs}
+        onSuccess={handleBulkTagSuccess}
       />
     </div>
   )

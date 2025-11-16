@@ -257,6 +257,28 @@ export const songsApi = {
       method: 'DELETE',
     })
   },
+
+  // Bulk update tags for multiple songs
+  bulkUpdateSongTags: async (
+    songIds: number[],
+    addTags?: Array<string | { name: string; group_id?: number; description?: string }>,
+    removeTags?: Array<number | string | { id?: number; name?: string }>,
+  ): Promise<{
+    processed_song_ids: number[]
+    additions_applied: number
+    removals_applied: number
+    created_tags: Tag[]
+    missing_remove_tags?: Array<{ id?: string; name?: string }>
+  }> => {
+    return apiRequest(`/songs/bulk-tags`, {
+      method: 'POST',
+      body: JSON.stringify({
+        song_ids: songIds,
+        add_tags: addTags,
+        remove_tags: removeTags,
+      }),
+    })
+  },
 }
 
 export const tagsApi = {
