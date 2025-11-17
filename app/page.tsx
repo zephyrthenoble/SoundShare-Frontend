@@ -20,9 +20,11 @@ export default function Home() {
   const [currentPlaylist, setCurrentPlaylist] = useState<Playlist | null>(null)
   const [editingFilter, setEditingFilter] = useState<PlaylistFilter | null>(null)
   const [activePlaylistKeys, setActivePlaylistKeys] = useState<string[]>(['playlist', 'queue'])
-  const [isPlaylistCollapsed, setIsPlaylistCollapsed] = useState(false)
-  const [isLibraryCollapsed, setIsLibraryCollapsed] = useState(false)
-  const isLibraryExpanded = isPlaylistCollapsed && !isLibraryCollapsed
+  
+  // Three states: 'both' | 'playlist-only' | 'library-only'
+  const [layoutState, setLayoutState] = useState<'both' | 'playlist-only' | 'library-only'>('both')
+  
+  const isLibraryExpanded = layoutState === 'library-only'
 
   const [currentQuery, setCurrentQuery] = useState<any>(null) // Track current filter query for debug panel
   const { currentSong, closePlayer } = useMusicPlayer()
@@ -47,6 +49,34 @@ export default function Home() {
     }
   }
 
+  // Handle toggling playlist visibility
+  const handleTogglePlaylist = () => {
+    if (layoutState === 'playlist-only') {
+      // Playlist maximized, clicking shrink goes to both visible
+      setLayoutState('both')
+    } else if (layoutState === 'both') {
+      // Both visible, clicking hide goes to library only
+      setLayoutState('library-only')
+    } else {
+      // Library only, clicking show goes to both visible
+      setLayoutState('both')
+    }
+  }
+
+  // Handle toggling library visibility
+  const handleToggleLibrary = () => {
+    if (layoutState === 'library-only') {
+      // Library maximized, clicking shrink goes to both visible
+      setLayoutState('both')
+    } else if (layoutState === 'both') {
+      // Both visible, clicking hide goes to playlist only
+      setLayoutState('playlist-only')
+    } else {
+      // Playlist only, clicking show goes to both visible
+      setLayoutState('both')
+    }
+  }
+
   return (
     <Layout className="min-h-screen bg-gray-50">
       <Header className="!bg-gray-50 border-b border-gray-300 px-6 flex items-center">
@@ -66,18 +96,19 @@ export default function Home() {
           />
 
           <Row gutter={[16, 0]} className="h-full">
-            {!isPlaylistCollapsed && (
-              <Col span={isLibraryCollapsed ? 24 : 10} className="h-full transition-all duration-200">
+            {/* Left side - Playlist or Show Playlist button */}
+            {layoutState !== 'library-only' ? (
+              <Col span={layoutState === 'playlist-only' ? 23 : 10} className="h-full transition-all duration-200">
                 <Card className="h-full">
                   <div className="flex items-center justify-between mb-4">
                     <Title level={4} className="!mb-0">Playlist & Queue</Title>
                     <Button
                       type="text"
-                      icon={<ChevronLeft size={16} />}
-                      onClick={() => setIsPlaylistCollapsed(true)}
+                      icon={layoutState === 'playlist-only' ? <ChevronRight size={16} /> : <ChevronLeft size={16} />}
+                      onClick={handleTogglePlaylist}
                       className="text-gray-600"
                     >
-                      Hide Playlist
+                      {layoutState === 'playlist-only' ? 'Shrink' : 'Hide Playlist'}
                     </Button>
                   </div>
                   <Collapse
@@ -147,32 +178,36 @@ export default function Home() {
                   />
                 </Card>
               </Col>
-            )}
-            {isPlaylistCollapsed && (
+            ) : (
               <Col span={1} className="h-full transition-all duration-200">
-                <Button
-                  type="text"
-                  icon={<ChevronRight size={16} />}
-                  onClick={() => setIsPlaylistCollapsed(false)}
-                  className="text-gray-600 h-full w-full flex items-start justify-center pt-4"
-                  style={{ writingMode: 'vertical-rl' }}
+                <Card 
+                  className="h-full flex items-center justify-center cursor-pointer hover:bg-gray-50"
+                  onClick={handleTogglePlaylist}
                 >
-                  Show Playlist
-                </Button>
+                  <div
+                    className="text-gray-600 flex items-center justify-center h-full"
+                    style={{ writingMode: 'vertical-rl' }}
+                  >
+                    <ChevronRight size={16} className="mb-2" />
+                    <span>Show Playlist</span>
+                  </div>
+                </Card>
               </Col>
             )}
-            {!isLibraryCollapsed && (
-              <Col span={isPlaylistCollapsed ? 23 : 14} className="h-full transition-all duration-200">
+
+            {/* Right side - Library or Show Library button */}
+            {layoutState !== 'playlist-only' ? (
+              <Col span={layoutState === 'library-only' ? 23 : 14} className="h-full transition-all duration-200">
                 <Card className="h-full">
                   <div className="flex items-center justify-between mb-4">
                     <Title level={4} className="!mb-0">Library</Title>
                     <Button
                       type="text"
-                      icon={<ChevronRight size={16} />}
-                      onClick={() => setIsLibraryCollapsed(true)}
+                      icon={layoutState === 'library-only' ? <ChevronLeft size={16} /> : <ChevronRight size={16} />}
+                      onClick={handleToggleLibrary}
                       className="text-gray-600"
                     >
-                      Hide Library
+                      {layoutState === 'library-only' ? 'Shrink' : 'Hide Library'}
                     </Button>
                   </div>
                   <LibraryColumn
@@ -185,18 +220,20 @@ export default function Home() {
                   />
                 </Card>
               </Col>
-            )}
-            {isLibraryCollapsed && (
+            ) : (
               <Col span={1} className="h-full transition-all duration-200">
-                <Button
-                  type="text"
-                  icon={<ChevronLeft size={16} />}
-                  onClick={() => setIsLibraryCollapsed(false)}
-                  className="text-gray-600 h-full w-full flex items-start justify-center pt-4"
-                  style={{ writingMode: 'vertical-rl' }}
+                <Card 
+                  className="h-full flex items-center justify-center cursor-pointer hover:bg-gray-50"
+                  onClick={handleToggleLibrary}
                 >
-                  Show Library
-                </Button>
+                  <div
+                    className="text-gray-600 flex items-center justify-center h-full"
+                    style={{ writingMode: 'vertical-rl' }}
+                  >
+                    <ChevronLeft size={16} className="mb-2" />
+                    <span>Show Library</span>
+                  </div>
+                </Card>
               </Col>
             )}
           </Row>
